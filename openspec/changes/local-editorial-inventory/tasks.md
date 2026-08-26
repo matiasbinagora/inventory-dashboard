@@ -1,6 +1,6 @@
 ## 1. Product Discovery Gate
 
-- [x] 1.1 DAY-1-TASK-001 Present 2 or 3 desktop editorial visual alternatives and record the selected direction. Priority: P0. OpenSpec: local-editorial-inventory. User selection remains pending; recommendation and rejected trade-offs are documented in the discovery artifact.
+- [x] 1.1 DAY-1-TASK-001 Present 2 or 3 desktop editorial visual alternatives and record the selected direction. Priority: P0. OpenSpec: local-editorial-inventory. User approved Alternative C with rounded color-coded count-up metrics, a collapsible icon-first sidebar, and Administration-controlled primary thumbnails reflected in catalog/detail.
 
 ## 2. Future Implementation
 
