@@ -4,7 +4,7 @@
 
 ## 2. Future Implementation
 
-- [ ] 2.1 DAY-1-TASK-002 Define project, link, media, and milestone contracts.
+- [x] 2.1 DAY-1-TASK-002 Define project, link, media, and milestone contracts.
 - [ ] 2.2 DAY-1-TASK-003 Implement SQLite persistence and tests.
 - [ ] 2.3 DAY-1-TASK-004 Implement Go API validation and CRUD behavior.
 - [ ] 2.4 DAY-1-TASK-005 Implement desktop dashboard and catalog.
