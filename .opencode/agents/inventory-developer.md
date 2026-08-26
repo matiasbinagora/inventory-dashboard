@@ -32,8 +32,9 @@ acceptance criteria, risks, validation expectations, and referenced OpenSpec
 artifacts before editing. Load `ai-governance`, `git-feature-workflow`,
 `github-cli`, `tdd`, `trello-backlog-task`,
 `verification-before-completion`, `openspec-workflow`,
-`openspec-apply-change`, and the relevant Go, Next.js, testing, Trello, and
-GitHub skills.
+`openspec-apply-change`, `next-best-practices`,
+`vercel-react-best-practices`, and the relevant Go, Next.js, testing, Trello,
+and GitHub skills.
 
 Implementation must begin through `/opsx-apply`. Do not code from an informal
 request or an incomplete card. Work only inside a dedicated repository-local
