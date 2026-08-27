@@ -60,6 +60,125 @@ func TestStorePersistsProjectsAndIsolatesChildren(t *testing.T) {
 	}
 }
 
+func TestDeleteProjectRemovesCompleteAggregate(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, "file:delete-aggregate?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	project, err := store.CreateProject(ctx, domain.Project{
+		Name:         "Delete aggregate",
+		Technologies: []string{"Go"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.AddLink(ctx, domain.PublicLink{
+		ProjectID: project.ID,
+		Kind:      domain.GitHub,
+		URL:       "https://github.com/example/delete-aggregate",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	original, err := store.AddMedia(ctx, domain.MediaAsset{
+		ProjectID: project.ID,
+		Role:      domain.Original,
+		Source:    "media/delete/original.png",
+		Curated:   true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.AddMedia(ctx, domain.MediaAsset{
+		ProjectID:       project.ID,
+		Role:            domain.Thumbnail,
+		Source:          "media/delete/thumbnail.png",
+		OriginalMediaID: original.ID,
+		Curated:         true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.AddMedia(ctx, domain.MediaAsset{
+		ProjectID: project.ID,
+		Role:      domain.Screenshot,
+		Source:    "media/delete/screenshot.png",
+		Curated:   true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.AddMilestone(ctx, domain.Milestone{
+		ProjectID:   project.ID,
+		Date:        "2026-01-01",
+		Title:       "Created",
+		Description: "Aggregate deletion regression",
+		MediaIDs:    []string{original.ID},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.DeleteProject(ctx, project.ID); err != nil {
+		t.Fatalf("delete complete aggregate: %v", err)
+	}
+	if _, err := store.GetProject(ctx, project.ID); err != domain.ErrNotFound {
+		t.Fatalf("GetProject after delete error=%v", err)
+	}
+	for _, table := range []string{"technologies", "public_links", "media", "milestones", "milestone_media"} {
+		var count int
+		if err := store.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Fatalf("%s contains %d rows after delete", table, count)
+		}
+	}
+}
+
+func TestDeleteProjectFailureDoesNotPartiallyDelete(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, "file:delete-failure?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	project, err := store.CreateProject(ctx, domain.Project{Name: "Protected delete"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.db.ExecContext(ctx, `CREATE TRIGGER prevent_project_delete BEFORE DELETE ON projects BEGIN SELECT RAISE(ABORT, 'protected'); END`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.DeleteProject(ctx, project.ID); err == nil {
+		t.Fatal("delete succeeded despite trigger failure")
+	}
+	if _, err := store.GetProject(ctx, project.ID); err != nil {
+		t.Fatalf("project was partially deleted: %v", err)
+	}
+}
+
+func TestListProjectsReleasesReadCursorBeforeDelete(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, "file:list-delete?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	project, err := store.CreateProject(ctx, domain.Project{Name: "List then delete"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ListProjects(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteProject(ctx, project.ID); err != nil {
+		t.Fatalf("delete after list: %v", err)
+	}
+}
+
 func TestStoreSurvivesReopen(t *testing.T) {
 	ctx := context.Background()
 	dsn := filepath.Join(t.TempDir(), "inventory.db")

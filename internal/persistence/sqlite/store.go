@@ -22,7 +22,16 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
+	// SQLite permits only one writer. A single pooled connection prevents a
+	// read cursor from competing with an application write on another handle;
+	// busy_timeout remains finite protection for an external SQLite process.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	store := &Store{db: db}
+	if _, err := db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("configure sqlite busy timeout: %w", err)
+	}
 	if err := store.initialize(ctx); err != nil {
 		db.Close()
 		return nil, err
@@ -192,20 +201,27 @@ func (s *Store) ListProjects(ctx context.Context) ([]domain.Project, error) {
 		return nil, fmt.Errorf("list projects: %w", err)
 	}
 	defer rows.Close()
-	projects := []domain.Project{}
+	ids := []string{}
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	projects := make([]domain.Project, 0, len(ids))
+	for _, id := range ids {
 		project, err := s.GetProject(ctx, id)
 		if err != nil {
 			return nil, err
 		}
 		projects = append(projects, project)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 	return projects, nil
 }
@@ -249,7 +265,24 @@ func (s *Store) UpdateProject(ctx context.Context, project domain.Project) error
 }
 
 func (s *Store) DeleteProject(ctx context.Context, id string) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM projects WHERE id=?`, id)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin project deletion: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM milestone_media WHERE milestone_id IN (SELECT id FROM milestones WHERE project_id=?)`, id); err != nil {
+		return fmt.Errorf("delete milestone media: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM milestones WHERE project_id=?`, id); err != nil {
+		return fmt.Errorf("delete milestones: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM media WHERE project_id=? AND original_media_id IS NOT NULL`, id); err != nil {
+		return fmt.Errorf("delete media previews: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM media WHERE project_id=?`, id); err != nil {
+		return fmt.Errorf("delete media: %w", err)
+	}
+	result, err := tx.ExecContext(ctx, `DELETE FROM projects WHERE id=?`, id)
 	if err != nil {
 		return fmt.Errorf("delete project: %w", err)
 	}
@@ -259,6 +292,9 @@ func (s *Store) DeleteProject(ctx context.Context, id string) error {
 	}
 	if count == 0 {
 		return domain.ErrNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit project deletion: %w", err)
 	}
 	return nil
 }
@@ -485,7 +521,6 @@ func (s *Store) loadChildren(ctx context.Context, p *domain.Project) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
@@ -496,11 +531,13 @@ func (s *Store) loadChildren(ctx context.Context, p *domain.Project) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
 	linkRows, err := s.db.QueryContext(ctx, `SELECT id,kind,url,label FROM public_links WHERE project_id=? ORDER BY id`, p.ID)
 	if err != nil {
 		return err
 	}
-	defer linkRows.Close()
 	for linkRows.Next() {
 		var link domain.PublicLink
 		if err := linkRows.Scan(&link.ID, &link.Kind, &link.URL, &link.Label); err != nil {
@@ -512,11 +549,13 @@ func (s *Store) loadChildren(ctx context.Context, p *domain.Project) error {
 	if err := linkRows.Err(); err != nil {
 		return err
 	}
+	if err := linkRows.Close(); err != nil {
+		return err
+	}
 	mediaRows, err := s.db.QueryContext(ctx, `SELECT id,role,source,COALESCE(original_media_id,''),alt_text,caption,curated FROM media WHERE project_id=? ORDER BY id`, p.ID)
 	if err != nil {
 		return err
 	}
-	defer mediaRows.Close()
 	for mediaRows.Next() {
 		var media domain.MediaAsset
 		if err := mediaRows.Scan(&media.ID, &media.Role, &media.Source, &media.OriginalMediaID, &media.AltText, &media.Caption, &media.Curated); err != nil {
@@ -528,11 +567,14 @@ func (s *Store) loadChildren(ctx context.Context, p *domain.Project) error {
 	if err := mediaRows.Err(); err != nil {
 		return err
 	}
+	if err := mediaRows.Close(); err != nil {
+		return err
+	}
 	milestoneRows, err := s.db.QueryContext(ctx, `SELECT id,date,title,description FROM milestones WHERE project_id=? ORDER BY date,id`, p.ID)
 	if err != nil {
 		return err
 	}
-	defer milestoneRows.Close()
+	milestones := []domain.Milestone{}
 	for milestoneRows.Next() {
 		var milestone domain.Milestone
 		if err := milestoneRows.Scan(&milestone.ID, &milestone.Date, &milestone.Title, &milestone.Description); err != nil {
@@ -540,6 +582,15 @@ func (s *Store) loadChildren(ctx context.Context, p *domain.Project) error {
 		}
 		milestone.ProjectID = p.ID
 		milestone.MediaIDs = []string{}
+		milestones = append(milestones, milestone)
+	}
+	if err := milestoneRows.Err(); err != nil {
+		return err
+	}
+	if err := milestoneRows.Close(); err != nil {
+		return err
+	}
+	for _, milestone := range milestones {
 		mediaIDRows, err := s.db.QueryContext(ctx, `SELECT media_id FROM milestone_media WHERE milestone_id=? ORDER BY media_id`, milestone.ID)
 		if err != nil {
 			return err
@@ -556,10 +607,12 @@ func (s *Store) loadChildren(ctx context.Context, p *domain.Project) error {
 			mediaIDRows.Close()
 			return err
 		}
-		mediaIDRows.Close()
+		if err := mediaIDRows.Close(); err != nil {
+			return err
+		}
 		p.Milestones = append(p.Milestones, milestone)
 	}
-	return milestoneRows.Err()
+	return nil
 }
 
 func nullable(value string) any {
