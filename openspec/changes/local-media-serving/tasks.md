@@ -14,4 +14,4 @@
 
 - [x] 3.1 DAY-1-TASK-013 Run Go/frontend tests, integration, race, vet, build, and reviewer-generated Playwright flows with temporary non-sensitive media.
 - [x] 3.2 DAY-1-TASK-013 Run `openspec validate --all --strict`, refresh Graphify and Codebase Memory, run `git diff --check`, and document runtime commands and limitations.
-- [ ] 3.3 DAY-1-TASK-013 Create a focused PR and record the Trello transition evidence; do not merge or mark Done.
+- [x] 3.3 DAY-1-TASK-013 Create a focused PR and record the Trello transition evidence; do not merge or mark Done.
