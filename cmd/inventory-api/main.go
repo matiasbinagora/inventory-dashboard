@@ -11,8 +11,10 @@ import (
 	"github.com/matiasbinagora/inventory-dashboard/internal/persistence/sqlite"
 )
 
+const defaultAPIAddress = "127.0.0.1:8080"
+
 func main() {
-	address := envOr("INVENTORY_API_ADDR", "127.0.0.1:8080")
+	address := envOr("INVENTORY_API_ADDR", defaultAPIAddress)
 	frontendOrigin := envOr("INVENTORY_FRONTEND_ORIGIN", api.DefaultFrontendOrigin)
 	dsn := envOr("INVENTORY_DB", "inventory.db")
 	store, err := sqlite.Open(context.Background(), dsn)

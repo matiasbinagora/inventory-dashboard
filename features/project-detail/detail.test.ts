@@ -5,9 +5,9 @@ import type { Project } from '../dashboard/types'
 const project: Project = {
   id: 'atlas', name: 'Atlas', technologies: ['Go'], links: [],
   media: [
-    { id: 'original', role: 'original', source: 'media/atlas/original.png' },
-    { id: 'thumb', role: 'thumbnail', source: 'media/atlas/thumb.png', original_media_id: 'original' },
-    { id: 'shot', role: 'screenshot', source: 'media/atlas/shot.png' },
+    { id: 'original', role: 'original', source: 'media/atlas/original.png', curated: true },
+    { id: 'thumb', role: 'thumbnail', source: 'media/atlas/thumb.png', original_media_id: 'original', curated: true },
+    { id: 'shot', role: 'screenshot', source: 'media/atlas/shot.png', curated: true },
   ],
   milestones: [
     { date: '2026-03-01', title: 'Second', description: 'Later', media_ids: [] },

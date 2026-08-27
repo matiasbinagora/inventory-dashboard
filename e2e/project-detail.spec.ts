@@ -5,8 +5,8 @@ const project = {
   technologies: ['Go', 'React'], agentic_platform: 'OpenAI',
   links: [{ id: 'github', kind: 'github', url: 'https://github.com/example/atlas' }, { id: 'trello', kind: 'trello', url: 'https://trello.com/c/abc123' }],
   media: [
-    { id: 'original', role: 'original', source: 'media/atlas/original.png', alt_text: 'Atlas original' },
-    { id: 'thumbnail', role: 'thumbnail', source: 'media/atlas/thumb.png', original_media_id: 'original', alt_text: 'Atlas thumbnail' },
+    { id: 'original', role: 'original', source: 'media/atlas/original.png', alt_text: 'Atlas original', curated: true },
+    { id: 'thumbnail', role: 'thumbnail', source: 'media/atlas/thumb.png', original_media_id: 'original', alt_text: 'Atlas thumbnail', curated: true },
     { id: 'video', role: 'video', source: 'https://video.example.test/atlas', caption: 'Public demo' },
   ],
   milestones: [

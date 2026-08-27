@@ -28,11 +28,11 @@ func TestStorePersistsProjectsAndIsolatesChildren(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	media, err := store.AddMedia(ctx, domain.MediaAsset{ProjectID: one.ID, Role: domain.Original, Source: "media/one/original.png"})
+	media, err := store.AddMedia(ctx, domain.MediaAsset{ProjectID: one.ID, Role: domain.Original, Source: "media/one/original.png", Curated: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = store.AddMedia(ctx, domain.MediaAsset{ProjectID: two.ID, Role: domain.Thumbnail, Source: "media/two/thumb.png", OriginalMediaID: media.ID}); err == nil {
+	if _, err = store.AddMedia(ctx, domain.MediaAsset{ProjectID: two.ID, Role: domain.Thumbnail, Source: "media/two/thumb.png", OriginalMediaID: media.ID, Curated: true}); err == nil {
 		t.Fatal("cross-project media association succeeded")
 	}
 	if _, err = store.AddMilestone(ctx, domain.Milestone{ProjectID: one.ID, Date: "2026-01-02", Title: "Started", Description: "First milestone", MediaIDs: []string{media.ID}}); err != nil {
@@ -106,7 +106,7 @@ func TestCreateProjectWithChildrenIsAtomic(t *testing.T) {
 		{
 			name:       "media failure rolls back project and earlier media",
 			trigger:    `CREATE TRIGGER fail_media BEFORE INSERT ON media WHEN NEW.source = 'fail' BEGIN SELECT RAISE(ABORT, 'media failure'); END`,
-			project:    domain.Project{Name: "Atomic media", Media: []domain.MediaAsset{{Role: domain.Original, Source: "media/original.png"}, {Role: domain.Screenshot, Source: "fail"}}},
+			project:    domain.Project{Name: "Atomic media", Media: []domain.MediaAsset{{Role: domain.Original, Source: "media/original.png", Curated: true}, {Role: domain.Screenshot, Source: "fail", Curated: true}}},
 			childTable: "media",
 		},
 		{
@@ -158,7 +158,7 @@ func TestCreateProjectWithChildrenPersistsCompleteAggregate(t *testing.T) {
 		Name:         "Complete aggregate",
 		Technologies: []string{"Go"},
 		Links:        []domain.PublicLink{{Kind: domain.GitHub, URL: "https://github.com/example/repo"}},
-		Media:        []domain.MediaAsset{{Role: domain.Original, Source: "media/original.png"}},
+		Media:        []domain.MediaAsset{{Role: domain.Original, Source: "media/original.png", Curated: true}},
 		Milestones:   []domain.Milestone{{Date: "2026-01-01", Title: "Started", Description: "First"}},
 	})
 	if err != nil {
