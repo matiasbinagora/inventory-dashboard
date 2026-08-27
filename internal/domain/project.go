@@ -19,14 +19,14 @@ var (
 )
 
 type Project struct {
-	ID              string
-	Name            string
-	Description     string
-	AgenticPlatform string
-	Technologies    []string
-	Links           []PublicLink
-	Media           []MediaAsset
-	Milestones      []Milestone
+	ID              string       `json:"id"`
+	Name            string       `json:"name"`
+	Description     string       `json:"description,omitempty"`
+	AgenticPlatform string       `json:"agentic_platform,omitempty"`
+	Technologies    []string     `json:"technologies"`
+	Links           []PublicLink `json:"links"`
+	Media           []MediaAsset `json:"media"`
+	Milestones      []Milestone  `json:"milestones"`
 }
 
 type LinkKind string
@@ -37,11 +37,11 @@ const (
 )
 
 type PublicLink struct {
-	ID        string
-	ProjectID string
-	Kind      LinkKind
-	URL       string
-	Label     string
+	ID        string   `json:"id,omitempty"`
+	ProjectID string   `json:"project_id,omitempty"`
+	Kind      LinkKind `json:"kind"`
+	URL       string   `json:"url"`
+	Label     string   `json:"label,omitempty"`
 }
 
 type MediaRole string
@@ -54,22 +54,22 @@ const (
 )
 
 type MediaAsset struct {
-	ID              string
-	ProjectID       string
-	Role            MediaRole
-	Source          string
-	OriginalMediaID string
-	AltText         string
-	Caption         string
+	ID              string    `json:"id,omitempty"`
+	ProjectID       string    `json:"project_id,omitempty"`
+	Role            MediaRole `json:"role"`
+	Source          string    `json:"source"`
+	OriginalMediaID string    `json:"original_media_id,omitempty"`
+	AltText         string    `json:"alt_text,omitempty"`
+	Caption         string    `json:"caption,omitempty"`
 }
 
 type Milestone struct {
-	ID          string
-	ProjectID   string
-	Date        string
-	Title       string
-	Description string
-	MediaIDs    []string
+	ID          string   `json:"id,omitempty"`
+	ProjectID   string   `json:"project_id,omitempty"`
+	Date        string   `json:"date"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	MediaIDs    []string `json:"media_ids"`
 }
 
 func (p Project) Validate() error {
