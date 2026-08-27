@@ -56,23 +56,85 @@ func (s *Store) CreateProject(ctx context.Context, project domain.Project) (doma
 		return domain.Project{}, fmt.Errorf("begin project transaction: %w", err)
 	}
 	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, `INSERT INTO projects(id,name,description,agentic_platform) VALUES(?,?,?,?)`, project.ID, strings.TrimSpace(project.Name), project.Description, project.AgenticPlatform)
-	if err != nil {
-		return domain.Project{}, fmt.Errorf("insert project: %w", err)
-	}
-	for _, technology := range project.Technologies {
-		technology = strings.TrimSpace(technology)
-		if technology == "" {
-			return domain.Project{}, fmt.Errorf("%w: empty technology", domain.ErrInvalidProject)
-		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO technologies(project_id,name) VALUES(?,?)`, project.ID, technology); err != nil {
-			return domain.Project{}, fmt.Errorf("insert technology: %w", err)
-		}
+	if err := insertProjectTx(ctx, tx, project); err != nil {
+		return domain.Project{}, err
 	}
 	if err = tx.Commit(); err != nil {
 		return domain.Project{}, fmt.Errorf("commit project: %w", err)
 	}
 	return s.GetProject(ctx, project.ID)
+}
+
+// CreateProjectWithChildren persists the complete project aggregate in one
+// SQLite transaction. Child inserts deliberately happen in dependency order:
+// links, media, then milestones and their media associations.
+func (s *Store) CreateProjectWithChildren(ctx context.Context, project domain.Project) (domain.Project, error) {
+	if err := project.Validate(); err != nil {
+		return domain.Project{}, err
+	}
+	for _, link := range project.Links {
+		if err := link.Validate(); err != nil {
+			return domain.Project{}, err
+		}
+	}
+	for _, media := range project.Media {
+		if err := media.Validate(); err != nil {
+			return domain.Project{}, err
+		}
+	}
+	for _, milestone := range project.Milestones {
+		if err := milestone.Validate(); err != nil {
+			return domain.Project{}, err
+		}
+	}
+
+	project.ID = newID()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.Project{}, fmt.Errorf("begin project aggregate transaction: %w", err)
+	}
+	defer tx.Rollback()
+	if err := insertProjectTx(ctx, tx, project); err != nil {
+		return domain.Project{}, err
+	}
+	for _, link := range project.Links {
+		link.ProjectID = project.ID
+		if _, err := insertLinkTx(ctx, tx, link); err != nil {
+			return domain.Project{}, err
+		}
+	}
+	for _, media := range project.Media {
+		media.ProjectID = project.ID
+		if _, err := insertMediaTx(ctx, tx, media); err != nil {
+			return domain.Project{}, err
+		}
+	}
+	for _, milestone := range project.Milestones {
+		milestone.ProjectID = project.ID
+		if _, err := insertMilestoneTx(ctx, tx, milestone); err != nil {
+			return domain.Project{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return domain.Project{}, fmt.Errorf("commit project aggregate: %w", err)
+	}
+	return s.GetProject(ctx, project.ID)
+}
+
+func insertProjectTx(ctx context.Context, tx *sql.Tx, project domain.Project) error {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO projects(id,name,description,agentic_platform) VALUES(?,?,?,?)`, project.ID, strings.TrimSpace(project.Name), project.Description, project.AgenticPlatform); err != nil {
+		return fmt.Errorf("insert project: %w", err)
+	}
+	for _, technology := range project.Technologies {
+		technology = strings.TrimSpace(technology)
+		if technology == "" {
+			return fmt.Errorf("%w: empty technology", domain.ErrInvalidProject)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO technologies(project_id,name) VALUES(?,?)`, project.ID, technology); err != nil {
+			return fmt.Errorf("insert technology: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *Store) GetProject(ctx context.Context, id string) (domain.Project, error) {
@@ -186,6 +248,14 @@ func (s *Store) AddLink(ctx context.Context, link domain.PublicLink) (domain.Pub
 	return link, nil
 }
 
+func insertLinkTx(ctx context.Context, tx *sql.Tx, link domain.PublicLink) (domain.PublicLink, error) {
+	link.ID = newID()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO public_links(id,project_id,kind,url,label) VALUES(?,?,?,?,?)`, link.ID, link.ProjectID, link.Kind, link.URL, link.Label); err != nil {
+		return domain.PublicLink{}, fmt.Errorf("insert public link: %w", err)
+	}
+	return link, nil
+}
+
 func (s *Store) DeleteLink(ctx context.Context, projectID, id string) error {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM public_links WHERE id=? AND project_id=?`, id, projectID)
 	if err != nil {
@@ -240,6 +310,24 @@ func (s *Store) AddMedia(ctx context.Context, media domain.MediaAsset) (domain.M
 	return media, nil
 }
 
+func insertMediaTx(ctx context.Context, tx *sql.Tx, media domain.MediaAsset) (domain.MediaAsset, error) {
+	media.ID = newID()
+	if media.OriginalMediaID != "" {
+		var role, projectID string
+		err := tx.QueryRowContext(ctx, `SELECT role,project_id FROM media WHERE id=?`, media.OriginalMediaID).Scan(&role, &projectID)
+		if err == sql.ErrNoRows || role != string(domain.Original) || projectID != media.ProjectID {
+			return domain.MediaAsset{}, fmt.Errorf("%w: original must belong to the same project", domain.ErrInvalidMedia)
+		}
+		if media.Role != domain.Thumbnail {
+			return domain.MediaAsset{}, fmt.Errorf("%w: only thumbnails can reference originals", domain.ErrInvalidMedia)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO media(id,project_id,role,source,original_media_id,alt_text,caption) VALUES(?,?,?,?,?,?,?)`, media.ID, media.ProjectID, media.Role, media.Source, nullable(media.OriginalMediaID), media.AltText, media.Caption); err != nil {
+		return domain.MediaAsset{}, fmt.Errorf("insert media: %w", err)
+	}
+	return media, nil
+}
+
 func (s *Store) AddMilestone(ctx context.Context, milestone domain.Milestone) (domain.Milestone, error) {
 	if err := milestone.Validate(); err != nil {
 		return domain.Milestone{}, err
@@ -267,6 +355,23 @@ func (s *Store) AddMilestone(ctx context.Context, milestone domain.Milestone) (d
 	}
 	if err = tx.Commit(); err != nil {
 		return domain.Milestone{}, err
+	}
+	return milestone, nil
+}
+
+func insertMilestoneTx(ctx context.Context, tx *sql.Tx, milestone domain.Milestone) (domain.Milestone, error) {
+	milestone.ID = newID()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO milestones(id,project_id,date,title,description) VALUES(?,?,?,?,?)`, milestone.ID, milestone.ProjectID, milestone.Date, milestone.Title, milestone.Description); err != nil {
+		return domain.Milestone{}, fmt.Errorf("insert milestone: %w", err)
+	}
+	for _, mediaID := range milestone.MediaIDs {
+		var projectID string
+		if err := tx.QueryRowContext(ctx, `SELECT project_id FROM media WHERE id=?`, mediaID).Scan(&projectID); err != nil || projectID != milestone.ProjectID {
+			return domain.Milestone{}, fmt.Errorf("%w: media belongs to another project", domain.ErrInvalidMilestone)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO milestone_media(milestone_id,media_id) VALUES(?,?)`, milestone.ID, mediaID); err != nil {
+			return domain.Milestone{}, err
+		}
 	}
 	return milestone, nil
 }

@@ -4,9 +4,11 @@ package sqlite
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 
+	"github.com/matiasbinagora/inventory-dashboard/internal/application"
 	"github.com/matiasbinagora/inventory-dashboard/internal/domain"
 )
 
@@ -85,5 +87,84 @@ func TestStoreSurvivesReopen(t *testing.T) {
 	}
 	if loaded.Name != created.Name {
 		t.Fatalf("reopened project name=%q, want %q", loaded.Name, created.Name)
+	}
+}
+
+func TestCreateProjectWithChildrenIsAtomic(t *testing.T) {
+	tests := []struct {
+		name       string
+		trigger    string
+		project    domain.Project
+		childTable string
+	}{
+		{
+			name:       "link failure rolls back project and earlier links",
+			trigger:    `CREATE TRIGGER fail_link BEFORE INSERT ON public_links WHEN NEW.url = 'fail' BEGIN SELECT RAISE(ABORT, 'link failure'); END`,
+			project:    domain.Project{Name: "Atomic links", Links: []domain.PublicLink{{Kind: domain.GitHub, URL: "https://github.com/example/repo"}, {Kind: domain.Trello, URL: "fail"}}},
+			childTable: "public_links",
+		},
+		{
+			name:       "media failure rolls back project and earlier media",
+			trigger:    `CREATE TRIGGER fail_media BEFORE INSERT ON media WHEN NEW.source = 'fail' BEGIN SELECT RAISE(ABORT, 'media failure'); END`,
+			project:    domain.Project{Name: "Atomic media", Media: []domain.MediaAsset{{Role: domain.Original, Source: "media/original.png"}, {Role: domain.Screenshot, Source: "fail"}}},
+			childTable: "media",
+		},
+		{
+			name:       "milestone failure rolls back project and earlier milestones",
+			trigger:    `CREATE TRIGGER fail_milestone BEFORE INSERT ON milestones WHEN NEW.title = 'fail' BEGIN SELECT RAISE(ABORT, 'milestone failure'); END`,
+			project:    domain.Project{Name: "Atomic milestones", Milestones: []domain.Milestone{{Date: "2026-01-01", Title: "Started", Description: "First"}, {Date: "2026-01-02", Title: "fail", Description: "Second"}}},
+			childTable: "milestones",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			store, err := Open(ctx, fmt.Sprintf("file:atomic-%s?mode=memory&cache=shared", tt.childTable))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer store.Close()
+			if _, err := store.db.ExecContext(ctx, tt.trigger); err != nil {
+				t.Fatal(err)
+			}
+
+			_, err = application.NewInventory(store).CreateProject(ctx, tt.project)
+			if err == nil {
+				t.Fatal("CreateProject succeeded despite child write failure")
+			}
+			for _, table := range []string{"projects", "technologies", "public_links", "media", "milestones", "milestone_media"} {
+				var count int
+				if err := store.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil {
+					t.Fatal(err)
+				}
+				if count != 0 {
+					t.Fatalf("%s contains %d rows after rollback", table, count)
+				}
+			}
+		})
+	}
+}
+
+func TestCreateProjectWithChildrenPersistsCompleteAggregate(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, "file:atomic-success?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	created, err := application.NewInventory(store).CreateProject(ctx, domain.Project{
+		Name:         "Complete aggregate",
+		Technologies: []string{"Go"},
+		Links:        []domain.PublicLink{{Kind: domain.GitHub, URL: "https://github.com/example/repo"}},
+		Media:        []domain.MediaAsset{{Role: domain.Original, Source: "media/original.png"}},
+		Milestones:   []domain.Milestone{{Date: "2026-01-01", Title: "Started", Description: "First"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created.Technologies) != 1 || len(created.Links) != 1 || len(created.Media) != 1 || len(created.Milestones) != 1 {
+		t.Fatalf("created aggregate missing children: %+v", created)
 	}
 }

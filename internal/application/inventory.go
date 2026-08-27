@@ -22,6 +22,13 @@ type Repository interface {
 	DeleteMilestone(context.Context, string, string) error
 }
 
+// AtomicProjectCreator is implemented by persistence adapters that can write
+// a project aggregate in one transaction. Repository remains unchanged so
+// existing adapters and test doubles keep their current contract.
+type AtomicProjectCreator interface {
+	CreateProjectWithChildren(context.Context, domain.Project) (domain.Project, error)
+}
+
 type Inventory struct{ repository Repository }
 
 func NewInventory(repository Repository) *Inventory { return &Inventory{repository: repository} }
@@ -29,6 +36,9 @@ func NewInventory(repository Repository) *Inventory { return &Inventory{reposito
 func (i *Inventory) CreateProject(ctx context.Context, project domain.Project) (domain.Project, error) {
 	if err := validateProjectChildren(project); err != nil {
 		return domain.Project{}, err
+	}
+	if creator, ok := i.repository.(AtomicProjectCreator); ok {
+		return creator.CreateProjectWithChildren(ctx, project)
 	}
 	created, err := i.repository.CreateProject(ctx, domain.Project{Name: project.Name, Description: project.Description, AgenticPlatform: project.AgenticPlatform, Technologies: project.Technologies})
 	if err != nil {
