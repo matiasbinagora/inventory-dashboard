@@ -40,13 +40,13 @@ npm run dev
 | `go test -race ./...` | PASS |
 | `go test -tags=integration ./...` | PASS; no additional tagged failures |
 | `go vet ./...` | PASS |
-| `go build ./...` | Not run in this session; equivalent compilation was exercised by `go run` and tests. |
+| `go build ./...` | PASS |
 | `npm install` | PASS; npm reported an existing `jsdom` engine warning for Node 25, with 0 vulnerabilities. |
 | `npm test` | PASS; 3 files, 7 tests |
 | `npm run build` | PASS; Next.js production build completed |
 | `npm run e2e` | PASS; 12 tests |
 | `openspec validate --all --strict` | PASS; 2 changes |
-| `git diff --check` | PASS before this report was added |
+| `git diff --check` | PASS |
 | `graphify extract . --code-only` | PASS; active worktree graph: 409 nodes, 738 edges |
 | Codebase Memory moderate index | PASS; active project: 1,634 nodes, 2,413 edges |
 
@@ -83,31 +83,27 @@ administration entry.
 | 3. Data and media survive restart | PASS for persisted media metadata | Live API restart preserved 2 media records; actual media files were not copied because the fixture path was intentionally synthetic |
 | 4. Gallery, video, links, milestones work | PASS | Project-owned AC4/AC5/AC6 plus live API CRUD metadata checks |
 | 5. Private information is not exposed | PASS | Seed tests and domain boundary tests; source/secret/transcript/private URL scan found no product-data exposure. Test fixtures contain rejection-marker literals only. |
-| 6. Mandatory tests pass | PASS with one documented omission | All executed tests/builds passed; standalone `go build ./...` was not run separately |
+| 6. Mandatory tests pass | PASS | All required tests, vet, race, and build commands passed |
 | 7. Evidence is registered for functional review | PASS | This report, command output, runtime logs, and Trello transition comment |
 
 ## Findings and limitations
 
-1. **LOW — standalone Go build evidence missing.** `go run` and `go test`
-   compiled the backend, but `go build ./...` should be rerun by the technical
-   reviewer before release if strict command completeness is required.
-2. **LOW — npm engine warning.** `jsdom@30.0.1` declares Node 22.22.2,
+1. **LOW — npm engine warning.** `jsdom@30.0.1` declares Node 22.22.2,
    24.15.0, or 26+, while this machine has Node 25.2.1. Tests and build pass;
    use a supported Node release in CI/release validation.
-3. **LOW — media file availability was not asserted against a real curated
+2. **LOW — media file availability was not asserted against a real curated
    binary.** The API correctly persisted and returned managed relative paths;
    the live synthetic path was not populated with an image/video file. No
    product or configuration change was made because this task is validation
    only.
-4. Mobile, authentication, synchronization/import, remote deployment, and
+3. Mobile, authentication, synchronization/import, remote deployment, and
    source-code browsing remain explicitly out of scope.
 
 ## Release decision
 
-**CONDITIONAL / do not mark Ready to Release yet.** The application behavior
-and privacy checks passed, but the evidence set is not fully green because the
-standalone `go build ./...` command and a real local media-file render were not
-executed in this session. This task does not silently repair those gaps. The
-technical/functional reviewers should rerun those two checks; if both pass,
-the report supports a release recommendation. No merge, deployment, or Done
-transition was performed.
+**CONDITIONAL / do not mark Ready to Release yet.** The application behavior,
+privacy checks, and standalone Go build passed. A real local media-file render
+was not executed, and the supported Node runtime warning remains. This task
+does not silently repair those gaps. The technical/functional reviewers should
+confirm those two low-risk release limitations before recommending release. No
+merge, deployment, or Done transition was performed.
