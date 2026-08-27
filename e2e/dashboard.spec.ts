@@ -16,6 +16,21 @@ test('sidebar remains accessible when collapsed', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-expanded', 'false')
 })
 
+test('sidebar Administration link navigates to the administration screen', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Primary navigation').getByRole('link', { name: 'Administration' }).click()
+  await expect(page).toHaveURL(/\/admin$/)
+  await expect(page.getByRole('heading', { name: 'Curate the inventory' })).toBeVisible()
+})
+
+test('sidebar Administration link activates with the keyboard', async ({ page }) => {
+  await page.goto('/')
+  const administration = page.getByLabel('Primary navigation').getByRole('link', { name: 'Administration' })
+  await administration.focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/admin$/)
+})
+
 test('catalog switches presentation and filters API records', async ({ page }) => {
   await page.route('**/api/projects', async (route) => route.fulfill({
     status: 200,

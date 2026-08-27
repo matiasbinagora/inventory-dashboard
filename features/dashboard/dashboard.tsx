@@ -25,7 +25,7 @@ function CountUp({ value }: { value: number }) {
 function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   return <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}`} aria-label="Primary navigation">
     <div className="brand"><span className="brand-mark">◈</span><span className="sidebar-label">INVENTORY</span></div>
-    <nav><a className="nav-item active" href="#dashboard"><span aria-hidden="true">{icons.dashboard}</span><span className="sidebar-label">Dashboard</span></a><a className="nav-item" href="#catalog"><span aria-hidden="true">{icons.catalog}</span><span className="sidebar-label">Catalog</span></a><a className="nav-item" href="#administration" aria-disabled="true"><span aria-hidden="true">{icons.admin}</span><span className="sidebar-label">Administration</span></a></nav>
+    <nav><a className="nav-item active" href="#dashboard"><span aria-hidden="true">{icons.dashboard}</span><span className="sidebar-label">Dashboard</span></a><a className="nav-item" href="#catalog"><span aria-hidden="true">{icons.catalog}</span><span className="sidebar-label">Catalog</span></a><a className="nav-item" href="/admin"><span aria-hidden="true">{icons.admin}</span><span className="sidebar-label">Administration</span></a></nav>
     <button className="collapse-button" onClick={onToggle} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed}>{collapsed ? '→' : '←'}<span className="sidebar-label">Collapse</span></button>
   </aside>
 }
