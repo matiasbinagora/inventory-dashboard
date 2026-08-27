@@ -1,0 +1,73 @@
+package api
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/matiasbinagora/inventory-dashboard/internal/application"
+	"github.com/matiasbinagora/inventory-dashboard/internal/domain"
+	"github.com/matiasbinagora/inventory-dashboard/internal/persistence/sqlite"
+)
+
+func TestProjectCRUDAndValidation(t *testing.T) {
+	store, err := sqlite.Open(context.Background(), "file:api-test?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	handler := NewHandler(application.NewInventory(store))
+
+	request := func(method, path string, body any) *httptest.ResponseRecorder {
+		var payload bytes.Buffer
+		if body != nil && json.NewEncoder(&payload).Encode(body) != nil {
+			t.Fatal("encode request")
+		}
+		req := httptest.NewRequest(method, path, &payload)
+		req.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+
+	invalid := request(http.MethodPost, "/api/projects", map[string]string{"name": "  "})
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("invalid project status = %d", invalid.Code)
+	}
+
+	created := request(http.MethodPost, "/api/projects", map[string]any{"name": "Editorial API", "technologies": []string{" Go "}})
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, body=%s", created.Code, created.Body.String())
+	}
+	var project domain.Project
+	if err := json.NewDecoder(created.Body).Decode(&project); err != nil {
+		t.Fatal(err)
+	}
+	if project.ID == "" || project.Technologies[0] != "Go" {
+		t.Fatalf("unexpected project: %+v", project)
+	}
+
+	link := request(http.MethodPost, "/api/projects/"+project.ID+"/links", domain.PublicLink{Kind: domain.GitHub, URL: "http://github.com/example/repo"})
+	if link.Code != http.StatusBadRequest {
+		t.Fatalf("invalid link status = %d", link.Code)
+	}
+	milestone := request(http.MethodPost, "/api/projects/"+project.ID+"/milestones", domain.Milestone{Date: "2026-01-01", Title: "First", Description: "Curated"})
+	if milestone.Code != http.StatusCreated {
+		t.Fatalf("milestone status = %d, body=%s", milestone.Code, milestone.Body.String())
+	}
+
+	got := request(http.MethodGet, "/api/projects/"+project.ID, nil)
+	if got.Code != http.StatusOK {
+		t.Fatalf("get status = %d", got.Code)
+	}
+	var loaded domain.Project
+	if err := json.NewDecoder(got.Body).Decode(&loaded); err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Milestones) != 1 {
+		t.Fatalf("milestones = %+v", loaded.Milestones)
+	}
+}

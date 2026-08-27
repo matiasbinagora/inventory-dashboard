@@ -94,6 +94,30 @@ func (s *Store) GetProject(ctx context.Context, id string) (domain.Project, erro
 	return p, nil
 }
 
+func (s *Store) ListProjects(ctx context.Context) ([]domain.Project, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM projects ORDER BY name, id`)
+	if err != nil {
+		return nil, fmt.Errorf("list projects: %w", err)
+	}
+	defer rows.Close()
+	projects := []domain.Project{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		project, err := s.GetProject(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		projects = append(projects, project)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return projects, nil
+}
+
 func (s *Store) UpdateProject(ctx context.Context, project domain.Project) error {
 	if project.ID == "" {
 		return domain.ErrNotFound
@@ -101,7 +125,12 @@ func (s *Store) UpdateProject(ctx context.Context, project domain.Project) error
 	if err := project.Validate(); err != nil {
 		return err
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE projects SET name=?,description=?,agentic_platform=? WHERE id=?`, strings.TrimSpace(project.Name), project.Description, project.AgenticPlatform, project.ID)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin project update: %w", err)
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `UPDATE projects SET name=?,description=?,agentic_platform=? WHERE id=?`, strings.TrimSpace(project.Name), project.Description, project.AgenticPlatform, project.ID)
 	if err != nil {
 		return fmt.Errorf("update project: %w", err)
 	}
@@ -112,7 +141,19 @@ func (s *Store) UpdateProject(ctx context.Context, project domain.Project) error
 	if count == 0 {
 		return domain.ErrNotFound
 	}
-	return nil
+	if _, err = tx.ExecContext(ctx, `DELETE FROM technologies WHERE project_id=?`, project.ID); err != nil {
+		return err
+	}
+	for _, technology := range project.Technologies {
+		technology = strings.TrimSpace(technology)
+		if technology == "" {
+			return fmt.Errorf("%w: empty technology", domain.ErrInvalidProject)
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO technologies(project_id,name) VALUES(?,?)`, project.ID, technology); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *Store) DeleteProject(ctx context.Context, id string) error {
@@ -230,8 +271,8 @@ func (s *Store) AddMilestone(ctx context.Context, milestone domain.Milestone) (d
 	return milestone, nil
 }
 
-func (s *Store) DeleteMedia(ctx context.Context, id string) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM media WHERE id=?`, id)
+func (s *Store) DeleteMedia(ctx context.Context, projectID, id string) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM media WHERE id=? AND project_id=?`, id, projectID)
 	if err != nil {
 		return fmt.Errorf("delete media: %w", err)
 	}
@@ -249,7 +290,12 @@ func (s *Store) UpdateMilestone(ctx context.Context, milestone domain.Milestone)
 	if err := milestone.Validate(); err != nil {
 		return err
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE milestones SET date=?,title=?,description=? WHERE id=? AND project_id=?`, milestone.Date, milestone.Title, milestone.Description, milestone.ID, milestone.ProjectID)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `UPDATE milestones SET date=?,title=?,description=? WHERE id=? AND project_id=?`, milestone.Date, milestone.Title, milestone.Description, milestone.ID, milestone.ProjectID)
 	if err != nil {
 		return fmt.Errorf("update milestone: %w", err)
 	}
@@ -260,7 +306,19 @@ func (s *Store) UpdateMilestone(ctx context.Context, milestone domain.Milestone)
 	if count == 0 {
 		return domain.ErrNotFound
 	}
-	return nil
+	if _, err = tx.ExecContext(ctx, `DELETE FROM milestone_media WHERE milestone_id=?`, milestone.ID); err != nil {
+		return err
+	}
+	for _, mediaID := range milestone.MediaIDs {
+		var projectID string
+		if err = tx.QueryRowContext(ctx, `SELECT project_id FROM media WHERE id=?`, mediaID).Scan(&projectID); err != nil || projectID != milestone.ProjectID {
+			return fmt.Errorf("%w: media belongs to another project", domain.ErrInvalidMilestone)
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO milestone_media(milestone_id,media_id) VALUES(?,?)`, milestone.ID, mediaID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *Store) DeleteMilestone(ctx context.Context, projectID, id string) error {
