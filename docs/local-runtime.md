@@ -11,5 +11,7 @@ npm run dev
 
 Open `http://127.0.0.1:3000`. Next.js proxies `/api/*` to the Go API at
 `127.0.0.1:8080`; the web UI does not duplicate API or business logic. The
-dashboard displays only records returned by `GET /api/projects`. No development
-seeds, credentials, source paths, private URLs, or sensitive media are bundled.
+dashboard displays only records returned by `GET /api/projects`. The API seeds
+two manually curated project records on first start; they contain no
+credentials, source paths, private URLs, or media. Further edits remain
+available through Administration.
