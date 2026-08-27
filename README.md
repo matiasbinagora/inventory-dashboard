@@ -113,3 +113,19 @@ board mutation. Never paste credentials into this repository or chat.
 Ignored local/generated content includes `.env.mcp`, `.worktrees/`,
 `graphify-out/`, `.codebase-memory/`, SQLite files, `node_modules/`, and build
 outputs.
+
+## Local media runtime
+
+The Go API serves curated local assets at `/media/<managed-relative-path>`;
+the configured root contains the managed `media/` directory. By default the
+root is the current runtime directory. Configure it with
+`INVENTORY_MEDIA_ROOT` and the per-file limit with `INVENTORY_MEDIA_MAX_BYTES`
+(default 50 MiB). The API remains loopback-only by default:
+
+```bash
+INVENTORY_MEDIA_ROOT=/path/to/runtime INVENTORY_DB=/path/to/inventory.db go run ./cmd/inventory-api
+```
+
+Only relative references under `media/` with supported image/video extensions
+are accepted. Missing files return 404; remote storage, automatic importing,
+and synchronization are intentionally out of scope.
