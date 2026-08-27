@@ -71,3 +71,73 @@ func TestProjectCRUDAndValidation(t *testing.T) {
 		t.Fatalf("milestones = %+v", loaded.Milestones)
 	}
 }
+
+func TestCORS(t *testing.T) {
+	handler := NewHandler(nil)
+
+	tests := []struct {
+		name               string
+		method             string
+		origin             string
+		requestMethod      string
+		requestHeaders     string
+		wantStatus         int
+		wantAllowedOrigin  string
+		wantAllowedMethods string
+		wantAllowedHeaders string
+	}{
+		{
+			name:              "allows configured frontend origin",
+			method:            http.MethodGet,
+			origin:            DefaultFrontendOrigin,
+			wantStatus:        http.StatusNotFound,
+			wantAllowedOrigin: DefaultFrontendOrigin,
+		},
+		{
+			name:       "rejects external origin",
+			method:     http.MethodGet,
+			origin:     "https://external.example",
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:               "answers allowed preflight without invoking route",
+			method:             http.MethodOptions,
+			origin:             DefaultFrontendOrigin,
+			requestMethod:      http.MethodPost,
+			requestHeaders:     "Content-Type",
+			wantStatus:         http.StatusNoContent,
+			wantAllowedOrigin:  DefaultFrontendOrigin,
+			wantAllowedMethods: "GET, POST, PUT, DELETE, OPTIONS",
+			wantAllowedHeaders: "Content-Type",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, "/api/unknown", nil)
+			req.Header.Set("Origin", tt.origin)
+			if tt.requestMethod != "" {
+				req.Header.Set("Access-Control-Request-Method", tt.requestMethod)
+			}
+			if tt.requestHeaders != "" {
+				req.Header.Set("Access-Control-Request-Headers", tt.requestHeaders)
+			}
+			response := httptest.NewRecorder()
+
+			handler.ServeHTTP(response, req)
+
+			if response.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, tt.wantStatus)
+			}
+			if got := response.Header().Get("Access-Control-Allow-Origin"); got != tt.wantAllowedOrigin {
+				t.Fatalf("allow origin = %q, want %q", got, tt.wantAllowedOrigin)
+			}
+			if got := response.Header().Get("Access-Control-Allow-Methods"); got != tt.wantAllowedMethods {
+				t.Fatalf("allow methods = %q, want %q", got, tt.wantAllowedMethods)
+			}
+			if got := response.Header().Get("Access-Control-Allow-Headers"); got != tt.wantAllowedHeaders {
+				t.Fatalf("allow headers = %q, want %q", got, tt.wantAllowedHeaders)
+			}
+		})
+	}
+}

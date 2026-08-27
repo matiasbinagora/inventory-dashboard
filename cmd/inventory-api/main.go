@@ -13,6 +13,7 @@ import (
 
 func main() {
 	address := envOr("INVENTORY_API_ADDR", "127.0.0.1:8080")
+	frontendOrigin := envOr("INVENTORY_FRONTEND_ORIGIN", api.DefaultFrontendOrigin)
 	dsn := envOr("INVENTORY_DB", "inventory.db")
 	store, err := sqlite.Open(context.Background(), dsn)
 	if err != nil {
@@ -20,7 +21,7 @@ func main() {
 	}
 	defer store.Close()
 	log.Printf("inventory API listening on %s", address)
-	if err := http.ListenAndServe(address, api.NewHandler(application.NewInventory(store))); err != nil {
+	if err := http.ListenAndServe(address, api.NewHandlerWithOrigin(application.NewInventory(store), frontendOrigin)); err != nil {
 		log.Fatal(err)
 	}
 }
