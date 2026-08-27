@@ -11,9 +11,15 @@ import (
 	"github.com/matiasbinagora/inventory-dashboard/internal/domain"
 )
 
+const DefaultFrontendOrigin = "http://127.0.0.1:3000"
+
 type Handler struct{ inventory *application.Inventory }
 
 func NewHandler(inventory *application.Inventory) http.Handler {
+	return NewHandlerWithOrigin(inventory, DefaultFrontendOrigin)
+}
+
+func NewHandlerWithOrigin(inventory *application.Inventory, allowedOrigin string) http.Handler {
 	h := &Handler{inventory: inventory}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/projects", h.listProjects)
@@ -29,7 +35,7 @@ func NewHandler(inventory *application.Inventory) http.Handler {
 	mux.HandleFunc("POST /api/projects/{id}/milestones", h.addMilestone)
 	mux.HandleFunc("PUT /api/projects/{id}/milestones/{milestoneID}", h.updateMilestone)
 	mux.HandleFunc("DELETE /api/projects/{id}/milestones/{milestoneID}", h.deleteMilestone)
-	return withJSON(mux)
+	return withCORS(withJSON(mux), allowedOrigin)
 }
 
 type projectRequest struct {
@@ -213,6 +219,31 @@ func withJSON(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+func withCORS(next http.Handler, allowedOrigin string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if origin != allowedOrigin {
+			http.Error(w, "origin is not allowed", http.StatusForbidden)
+			return
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		w.Header().Add("Vary", "Origin")
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
