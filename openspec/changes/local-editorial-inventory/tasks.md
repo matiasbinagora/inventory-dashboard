@@ -8,6 +8,6 @@
 - [x] 2.2 DAY-1-TASK-003 Implement SQLite persistence and tests.
 - [x] 2.3 DAY-1-TASK-004 Implement Go API validation and CRUD behavior.
 - [x] 2.4 DAY-1-TASK-005 Implement desktop dashboard and catalog.
-- [ ] 2.5 DAY-1-TASK-006 Implement desktop project detail.
+- [x] 2.5 DAY-1-TASK-006 Implement desktop project detail.
 - [ ] 2.6 DAY-1-TASK-007 Implement local administration.
 - [ ] 2.7 DAY-1-TASK-008 Add privacy-boundary tests and curate safe seed metadata.
