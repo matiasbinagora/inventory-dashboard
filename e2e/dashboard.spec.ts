@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test'
 
-test('desktop dashboard exposes catalog controls and empty state', async ({ page }) => {
+test('desktop dashboard exposes catalog controls and curated seed', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Project inventory' })).toBeVisible()
   await expect(page.getByLabel('Primary navigation')).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Search projects' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Table/ })).toBeVisible()
-  await expect(page.getByText(/catalog is ready|No projects match|Could not reach/)).toBeVisible()
+  await expect(page.getByText(/Slack Video Assistant|No projects match|Could not reach/)).toBeVisible()
 })
 
 test('sidebar remains accessible when collapsed', async ({ page }) => {

@@ -9,6 +9,7 @@ import (
 	"github.com/matiasbinagora/inventory-dashboard/internal/api"
 	"github.com/matiasbinagora/inventory-dashboard/internal/application"
 	"github.com/matiasbinagora/inventory-dashboard/internal/persistence/sqlite"
+	"github.com/matiasbinagora/inventory-dashboard/internal/seed"
 )
 
 const defaultAPIAddress = "127.0.0.1:8080"
@@ -22,6 +23,9 @@ func main() {
 		log.Fatal(err)
 	}
 	defer store.Close()
+	if err := seed.Apply(context.Background(), application.NewInventory(store)); err != nil {
+		log.Fatal(err)
+	}
 	log.Printf("inventory API listening on %s", address)
 	if err := http.ListenAndServe(address, api.NewHandlerWithOrigin(application.NewInventory(store), frontendOrigin)); err != nil {
 		log.Fatal(err)

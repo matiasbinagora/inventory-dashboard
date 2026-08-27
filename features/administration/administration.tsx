@@ -34,7 +34,7 @@ export function Administration() {
   }
   const addCuratedMedia = async (event: React.FormEvent) => {
     event.preventDefault(); if (!project || !media.source.trim()) return
-    try { await addMedia(project.id, media); await refresh(project.id); setMedia({ ...media, source: '' }); setMessage('Media association added.') } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not add media.') }
+    try { await addMedia(project.id, { ...media, curated: true }); await refresh(project.id); setMedia({ ...media, source: '' }); setMessage('Media association added.') } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not add media.') }
   }
   const chooseThumbnail = async (item: Media) => {
     if (!project || !window.confirm('Use this curated asset as the main thumbnail? The original association will remain.')) return
