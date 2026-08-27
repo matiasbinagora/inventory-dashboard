@@ -12,7 +12,8 @@ Specs: `editorial-project-catalog`, `local-project-administration`,
 - Branch: `feature/task-010-validacion-integral-y-preparacion-de-release`
 - Base: `origin/main` at `faa06e090bcb7bd334148a441c70b1f585330b24` when the
   worktree was created.
-- macOS, Node `v25.2.1`, npm `11.6.2`, Go toolchain as installed locally,
+- macOS, baseline Node `v25.2.1`, npm `11.6.2`, and supported validation Node
+  `v24.15.0`; Go toolchain as installed locally,
   Playwright `1.62.1`.
 - API: `127.0.0.1:8080`; web: `127.0.0.1:3000`.
 - Database: temporary SQLite files under `/tmp`; no repository database was
@@ -50,6 +51,15 @@ npm run dev
 | `graphify extract . --code-only` | PASS; active worktree graph: 409 nodes, 738 edges |
 | Codebase Memory moderate index | PASS; active project: 1,634 nodes, 2,413 edges |
 
+Follow-up validation:
+
+- `npx -y node@24.15.0 node_modules/vitest/vitest.mjs run`: PASS; 3 files,
+  7 tests.
+- `npx -y node@24.15.0 node_modules/next/dist/bin/next build`: PASS.
+- `curl -sS -o /tmp/qa-real-media-response -w '%{http_code}'
+  http://127.0.0.1:3000/media/atlas/original.png`: FAIL as an asset-availability
+  check with HTTP 404; no managed media binary is currently served by the app.
+
 ## Runtime evidence
 
 With a fresh temporary SQLite database, the API seeded two curated projects.
@@ -80,7 +90,7 @@ administration entry.
 | --- | --- | --- |
 | 1. Runtime starts with documented commands | PASS | `docs/local-runtime.md`; live API and Next.js processes on loopback |
 | 2. Dashboard, catalog, detail, administration work | PASS | `npm run e2e` 12/12; reviewer snapshots; live seeded navigation |
-| 3. Data and media survive restart | PASS for persisted media metadata | Live API restart preserved 2 media records; actual media files were not copied because the fixture path was intentionally synthetic |
+| 3. Data and media survive restart | PASS for persisted media metadata; FAIL for binary rendering | Live API restart preserved 2 media records; a managed media URL returned HTTP 404 because no binary asset is currently served |
 | 4. Gallery, video, links, milestones work | PASS | Project-owned AC4/AC5/AC6 plus live API CRUD metadata checks |
 | 5. Private information is not exposed | PASS | Seed tests and domain boundary tests; source/secret/transcript/private URL scan found no product-data exposure. Test fixtures contain rejection-marker literals only. |
 | 6. Mandatory tests pass | PASS | All required tests, vet, race, and build commands passed |
@@ -88,22 +98,22 @@ administration entry.
 
 ## Findings and limitations
 
-1. **LOW — npm engine warning.** `jsdom@30.0.1` declares Node 22.22.2,
-   24.15.0, or 26+, while this machine has Node 25.2.1. Tests and build pass;
-   use a supported Node release in CI/release validation.
-2. **LOW — media file availability was not asserted against a real curated
-   binary.** The API correctly persisted and returned managed relative paths;
-   the live synthetic path was not populated with an image/video file. No
-   product or configuration change was made because this task is validation
-   only.
+1. **RESOLVED — npm engine warning.** The baseline Node 25 environment is
+   outside the declared `jsdom` support range, but the test and production build
+   both pass under supported Node `v24.15.0`.
+2. **MEDIUM — media file availability.** The API correctly persists and returns
+   managed relative paths, but the live managed media URL returned HTTP 404.
+   The application still needs an approved media-serving/storage path before
+   gallery rendering can be considered release-ready. No product change was
+   made because this task is validation only.
 3. Mobile, authentication, synchronization/import, remote deployment, and
    source-code browsing remain explicitly out of scope.
 
 ## Release decision
 
 **CONDITIONAL / do not mark Ready to Release yet.** The application behavior,
-privacy checks, and standalone Go build passed. A real local media-file render
-was not executed, and the supported Node runtime warning remains. This task
-does not silently repair those gaps. The technical/functional reviewers should
-confirm those two low-risk release limitations before recommending release. No
-merge, deployment, or Done transition was performed.
+privacy checks, standalone Go build, and supported Node 24 validation passed.
+The managed media URL still returns HTTP 404, so gallery rendering with an
+actual local binary is not release-ready. This task does not silently repair
+that product/storage gap. No merge, deployment, or Done transition was
+performed.
