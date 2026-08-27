@@ -40,8 +40,38 @@ func (s *Store) initialize(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, string(contents)); err != nil {
 		return fmt.Errorf("initialize schema: %w", err)
 	}
+	if err := s.ensureCuratedColumn(ctx); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO schema_migrations(version) VALUES(1)`); err != nil {
 		return fmt.Errorf("record schema migration: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ensureCuratedColumn(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `PRAGMA table_info(media)`)
+	if err != nil {
+		return fmt.Errorf("inspect media schema: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, columnType string
+		var notNull, primaryKey int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return fmt.Errorf("inspect media column: %w", err)
+		}
+		if name == "curated" {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read media schema: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `ALTER TABLE media ADD COLUMN curated INTEGER NOT NULL DEFAULT 0 CHECK (curated IN (0, 1))`); err != nil {
+		return fmt.Errorf("add media curation boundary: %w", err)
 	}
 	return nil
 }
@@ -303,7 +333,7 @@ func (s *Store) AddMedia(ctx context.Context, media domain.MediaAsset) (domain.M
 			return domain.MediaAsset{}, fmt.Errorf("%w: only thumbnails can reference originals", domain.ErrInvalidMedia)
 		}
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO media(id,project_id,role,source,original_media_id,alt_text,caption) VALUES(?,?,?,?,?,?,?)`, media.ID, media.ProjectID, media.Role, media.Source, nullable(media.OriginalMediaID), media.AltText, media.Caption)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO media(id,project_id,role,source,original_media_id,alt_text,caption,curated) VALUES(?,?,?,?,?,?,?,?)`, media.ID, media.ProjectID, media.Role, media.Source, nullable(media.OriginalMediaID), media.AltText, media.Caption, media.Curated)
 	if err != nil {
 		return domain.MediaAsset{}, fmt.Errorf("insert media: %w", err)
 	}
@@ -322,7 +352,7 @@ func insertMediaTx(ctx context.Context, tx *sql.Tx, media domain.MediaAsset) (do
 			return domain.MediaAsset{}, fmt.Errorf("%w: only thumbnails can reference originals", domain.ErrInvalidMedia)
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO media(id,project_id,role,source,original_media_id,alt_text,caption) VALUES(?,?,?,?,?,?,?)`, media.ID, media.ProjectID, media.Role, media.Source, nullable(media.OriginalMediaID), media.AltText, media.Caption); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO media(id,project_id,role,source,original_media_id,alt_text,caption,curated) VALUES(?,?,?,?,?,?,?,?)`, media.ID, media.ProjectID, media.Role, media.Source, nullable(media.OriginalMediaID), media.AltText, media.Caption, media.Curated); err != nil {
 		return domain.MediaAsset{}, fmt.Errorf("insert media: %w", err)
 	}
 	return media, nil
@@ -482,14 +512,14 @@ func (s *Store) loadChildren(ctx context.Context, p *domain.Project) error {
 	if err := linkRows.Err(); err != nil {
 		return err
 	}
-	mediaRows, err := s.db.QueryContext(ctx, `SELECT id,role,source,COALESCE(original_media_id,''),alt_text,caption FROM media WHERE project_id=? ORDER BY id`, p.ID)
+	mediaRows, err := s.db.QueryContext(ctx, `SELECT id,role,source,COALESCE(original_media_id,''),alt_text,caption,curated FROM media WHERE project_id=? ORDER BY id`, p.ID)
 	if err != nil {
 		return err
 	}
 	defer mediaRows.Close()
 	for mediaRows.Next() {
 		var media domain.MediaAsset
-		if err := mediaRows.Scan(&media.ID, &media.Role, &media.Source, &media.OriginalMediaID, &media.AltText, &media.Caption); err != nil {
+		if err := mediaRows.Scan(&media.ID, &media.Role, &media.Source, &media.OriginalMediaID, &media.AltText, &media.Caption, &media.Curated); err != nil {
 			return err
 		}
 		media.ProjectID = p.ID

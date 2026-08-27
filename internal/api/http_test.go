@@ -141,3 +141,37 @@ func TestCORS(t *testing.T) {
 		})
 	}
 }
+
+func TestPrivacyBoundariesRejectUncuratedAndSensitiveMedia(t *testing.T) {
+	store, err := sqlite.Open(context.Background(), "file:privacy-api-test?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	handler := NewHandler(application.NewInventory(store))
+	request := func(body domain.MediaAsset) *httptest.ResponseRecorder {
+		var payload bytes.Buffer
+		if err := json.NewEncoder(&payload).Encode(body); err != nil {
+			t.Fatal(err)
+		}
+		project, err := store.CreateProject(context.Background(), domain.Project{Name: "Privacy"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/projects/"+project.ID+"/media", &payload)
+		req.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		return response
+	}
+
+	for _, media := range []domain.MediaAsset{
+		{Role: domain.Screenshot, Source: "media/project/screenshot.png"},
+		{Role: domain.Screenshot, Source: "media/project/.env", Curated: true},
+		{Role: domain.Screenshot, Source: "media/project/source.go", Curated: true},
+	} {
+		if response := request(media); response.Code != http.StatusBadRequest {
+			t.Fatalf("media %+v status = %d, want %d", media, response.Code, http.StatusBadRequest)
+		}
+	}
+}
