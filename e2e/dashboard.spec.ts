@@ -29,3 +29,21 @@ test('catalog switches presentation and filters API records', async ({ page }) =
   await page.getByRole('textbox', { name: 'Search projects' }).fill('not found')
   await expect(page.getByText('No projects match these filters')).toBeVisible()
 })
+
+test('serves a local favicon without a missing-icon 404', async ({ page }) => {
+  const missingIconResponses: string[] = []
+
+  page.on('response', (response) => {
+    if (response.status() === 404 && /\/(favicon|icon)\.(ico|svg)$/.test(new URL(response.url()).pathname)) {
+      missingIconResponses.push(response.url())
+    }
+  })
+
+  await page.goto('/')
+
+  const iconHref = await page.locator('link[rel="icon"]').getAttribute('href')
+  expect(iconHref).not.toBeNull()
+  expect(new URL(iconHref!, page.url()).pathname).toBe('/icon.svg')
+  expect((await page.request.get(new URL(iconHref!, page.url()).toString())).status()).toBe(200)
+  expect(missingIconResponses).toEqual([])
+})
