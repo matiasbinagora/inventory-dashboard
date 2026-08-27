@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Inventory control room</title>
+  <rect width="64" height="64" rx="14" fill="#172033"/>
+  <path d="M16 18h32v8H16zM16 29h22v8H16zM16 40h32v8H16z" fill="#f4b860"/>
+  <circle cx="45" cy="33" r="7" fill="#68c3b7"/>
+</svg>
