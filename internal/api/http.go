@@ -5,22 +5,38 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/matiasbinagora/inventory-dashboard/internal/application"
 	"github.com/matiasbinagora/inventory-dashboard/internal/domain"
+	"github.com/matiasbinagora/inventory-dashboard/internal/media"
 )
 
 const DefaultFrontendOrigin = "http://127.0.0.1:3000"
+const DefaultMediaRoot = "."
 
-type Handler struct{ inventory *application.Inventory }
+type Handler struct {
+	inventory *application.Inventory
+	media     *media.Store
+}
 
 func NewHandler(inventory *application.Inventory) http.Handler {
 	return NewHandlerWithOrigin(inventory, DefaultFrontendOrigin)
 }
 
 func NewHandlerWithOrigin(inventory *application.Inventory, allowedOrigin string) http.Handler {
-	h := &Handler{inventory: inventory}
+	return NewHandlerWithOriginAndMediaRoot(inventory, allowedOrigin, DefaultMediaRoot, media.DefaultMaxBytes)
+}
+
+func NewHandlerWithOriginAndMediaRoot(inventory *application.Inventory, allowedOrigin, mediaRoot string, maxMediaBytes int64) http.Handler {
+	mediaStore, err := media.NewStore(mediaRoot, maxMediaBytes)
+	if err != nil {
+		panic(err)
+	}
+	h := &Handler{inventory: inventory, media: mediaStore}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/projects", h.listProjects)
 	mux.HandleFunc("POST /api/projects", h.createProject)
@@ -31,7 +47,9 @@ func NewHandlerWithOrigin(inventory *application.Inventory, allowedOrigin string
 	mux.HandleFunc("DELETE /api/projects/{id}/links/{linkID}", h.deleteLink)
 	mux.HandleFunc("POST /api/projects/{id}/technologies", h.addTechnology)
 	mux.HandleFunc("POST /api/projects/{id}/media", h.addMedia)
+	mux.HandleFunc("POST /api/projects/{id}/media/upload", h.uploadMedia)
 	mux.HandleFunc("DELETE /api/projects/{id}/media/{mediaID}", h.deleteMedia)
+	mux.HandleFunc("GET /media/{path...}", h.serveMedia)
 	mux.HandleFunc("POST /api/projects/{id}/milestones", h.addMilestone)
 	mux.HandleFunc("PUT /api/projects/{id}/milestones/{milestoneID}", h.updateMilestone)
 	mux.HandleFunc("DELETE /api/projects/{id}/milestones/{milestoneID}", h.deleteMilestone)
@@ -69,6 +87,10 @@ func (h *Handler) createProject(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &request) {
 		return
 	}
+	if err := h.validateProjectMedia(request.Media); err != nil {
+		writeMediaError(w, err)
+		return
+	}
 	project, err := h.inventory.CreateProject(r.Context(), request.project())
 	if err != nil {
 		writeError(w, err)
@@ -91,11 +113,29 @@ func (h *Handler) updateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	project := request.project()
 	project.ID = r.PathValue("id")
+	if err := h.validateProjectMedia(project.Media); err != nil {
+		writeMediaError(w, err)
+		return
+	}
 	if err := h.inventory.UpdateProject(r.Context(), project); err != nil {
 		writeError(w, err)
 		return
 	}
 	h.getProject(w, r)
+}
+
+func (h *Handler) validateProjectMedia(assets []domain.MediaAsset) error {
+	for _, asset := range assets {
+		if err := asset.Validate(); err != nil {
+			return err
+		}
+		if !strings.HasPrefix(strings.ToLower(asset.Source), "https://") {
+			if err := h.media.Register(asset.Source); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 func (h *Handler) deleteProject(w http.ResponseWriter, r *http.Request) {
 	if err := h.inventory.DeleteProject(r.Context(), r.PathValue("id")); err != nil {
@@ -141,12 +181,93 @@ func (h *Handler) addMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	media.ProjectID = r.PathValue("id")
+	if err := media.Validate(); err != nil {
+		writeError(w, err)
+		return
+	}
+	if !strings.HasPrefix(strings.ToLower(media.Source), "https://") {
+		if err := h.media.Register(media.Source); err != nil {
+			writeMediaError(w, err)
+			return
+		}
+	}
 	created, err := h.inventory.AddMedia(r.Context(), media)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
+}
+
+func (h *Handler) uploadMedia(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(1 << 20); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid media upload"})
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "media file is required"})
+		return
+	}
+	defer file.Close()
+	role := domain.MediaRole(r.FormValue("role"))
+	if role == "" {
+		role = domain.Original
+	}
+	source, err := h.media.Save(r.PathValue("id"), header.Filename, file)
+	if err != nil {
+		writeMediaError(w, err)
+		return
+	}
+	created, err := h.inventory.AddMedia(r.Context(), domain.MediaAsset{
+		ProjectID: r.PathValue("id"),
+		Role:      role,
+		Source:    source,
+		AltText:   r.FormValue("alt_text"),
+		Caption:   r.FormValue("caption"),
+		Curated:   true,
+	})
+	if err != nil {
+		writeMediaError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (h *Handler) serveMedia(w http.ResponseWriter, r *http.Request) {
+	managedPath := filepath.ToSlash(filepath.Join("media", r.PathValue("path")))
+	file, contentType, err := h.media.Open(managedPath)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		writeMediaError(w, err)
+		return
+	}
+	defer file.Close()
+	w.Header().Set("Content-Type", contentType)
+	http.ServeContent(w, r, filepath.Base(r.PathValue("path")), fileInfoModTime(file), file)
+}
+
+func fileInfoModTime(file *os.File) time.Time {
+	info, err := file.Stat()
+	if err != nil {
+		return time.Time{}
+	}
+	return info.ModTime()
+}
+
+func writeMediaError(w http.ResponseWriter, err error) {
+	if errors.Is(err, domain.ErrNotFound) {
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: "media asset not found"})
+		return
+	}
+	if errors.Is(err, media.ErrInvalidAsset) || errors.Is(err, domain.ErrInvalidMedia) {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid media asset"})
+		return
+	}
+	writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "media asset unavailable"})
 }
 func (h *Handler) deleteMedia(w http.ResponseWriter, r *http.Request) {
 	if err := h.inventory.DeleteMedia(r.Context(), r.PathValue("id"), r.PathValue("mediaID")); err != nil {
