@@ -37,3 +37,25 @@
   .detail-gallery{grid-template-columns:1fr}
   .gallery-item img{height:190px}
 }
+
+/* Task 020: report media keeps its intrinsic ratio at the primary content width. */
+.detail-gallery{display:block}
+.gallery-item{display:block;width:100%;max-width:100%;margin:0 0 12px}
+.gallery-item img{display:block;width:100%;height:auto;max-width:100%;object-fit:contain}
+.card-description{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;min-height:4.5em;line-height:1.5}
+.tag-row{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.tag{max-width:100%;overflow-wrap:anywhere}
+@media (max-width:760px){
+  .app-shell{display:block}
+  .sidebar{width:100%;padding:16px;display:grid;grid-template-columns:1fr auto;gap:14px}
+  .brand{padding:0}
+  .sidebar nav{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px}
+  .nav-item{padding:10px}
+  .collapse-button{margin:0;width:auto;padding:10px}
+  .main-content{min-width:0;padding:28px 6vw 60px}
+  .topbar{flex-direction:column;gap:20px}
+  .topbar-actions{width:100%;justify-content:space-between}
+  .metrics{grid-template-columns:repeat(2,minmax(0,1fr));margin:36px 0 52px}
+  .project-grid{grid-template-columns:minmax(0,1fr)}
+  .project-card{min-width:0}
+}

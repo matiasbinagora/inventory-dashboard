@@ -103,3 +103,24 @@ test('AC9 renders structured metadata and one representative report image on des
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
 })
+
+test('AC10 keeps report media full-width and lightbox-selectable across viewports', async ({ page }) => {
+  await mockProject(page, {
+    ...project,
+    media: [{ id: 'report', role: 'screenshot', source: 'media/atlas/report.png', alt_text: 'Graphify report', curated: true }],
+  })
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/projects/curated-atlas')
+
+  const galleryItem = page.locator('.gallery-item')
+  expect(await galleryItem.evaluate((element) => Math.round(element.getBoundingClientRect().width))).toBe(
+    await page.locator('.detail-primary').evaluate((element) => Math.round(element.getBoundingClientRect().width)),
+  )
+  await expect(galleryItem.locator('img')).toHaveCSS('max-width', '100%')
+  await galleryItem.click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+
+  await page.keyboard.press('Escape')
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+})

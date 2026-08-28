@@ -32,4 +32,25 @@ describe('dashboard sidebar navigation', () => {
     const navigation = screen.getByLabelText('Primary navigation')
     expect(within(navigation).getByRole('link', { name: 'Dashboard' })).toHaveClass('active')
   })
+
+  it('presents compact descriptions and name-only technology pills', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => [{
+        id: 'atlas',
+        name: 'Atlas',
+        description: 'One two three four five six seven eight nine ten',
+        technologies: ['Go: https://go.dev', 'React'],
+        links: [], media: [], milestones: [],
+      }],
+    } as Response)
+
+    render(<Dashboard />)
+
+    const card = await screen.findByRole('link', { name: /Atlas/ })
+    expect(card.querySelector('.card-description')).toHaveClass('card-description')
+    expect(within(card).getByText('Go')).toHaveClass('tag')
+    expect(within(card).getByText('React')).toHaveClass('tag')
+    expect(within(card).queryByText('https://go.dev')).not.toBeInTheDocument()
+  })
 })
