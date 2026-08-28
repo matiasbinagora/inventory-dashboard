@@ -33,8 +33,9 @@ describe('ProjectDetail presentation', () => {
 
     expect(screen.getByRole('heading', { name: 'Graphify Report' })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'Demo Video' })).toBeVisible()
-    expect(screen.getByRole('list', { name: '' })).toContainElement(screen.getByText('Go'))
-    expect(screen.getByText('Next.js').tagName).toBe('LI')
+    expect(document.querySelector('.technology-list')).toContainElement(screen.getByText('Go'))
+    expect(screen.getByText('Next.js').tagName).toBe('SPAN')
+    expect(screen.getByRole('link', { name: 'https://platform.openai.com/docs' })).toHaveClass('metadata-link')
     expect(document.querySelector('.detail-hero p')).toHaveTextContent(project.description)
   })
 

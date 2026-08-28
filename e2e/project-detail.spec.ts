@@ -81,3 +81,25 @@ test('AC8 presents refined detail sections without narrow viewport overflow', as
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
   expect(await page.locator('.detail-hero h1').evaluate((element) => element.getBoundingClientRect().right)).toBeLessThanOrEqual(390)
 })
+
+test('AC9 renders structured metadata and one representative report image on desktop and narrow viewports', async ({ page }) => {
+  await mockProject(page, {
+    ...project,
+    description: 'A long description that uses the full hero row while retaining a readable measure.',
+    technologies: ['Go: https://go.dev', 'React'],
+    agentic_platform: 'OpenAI — hosted docs: https://platform.openai.com/docs',
+    media: [
+      ...project.media,
+      { id: 'duplicate', role: 'screenshot', source: 'media/atlas/thumb.png', original_media_id: 'original', alt_text: 'Atlas duplicate', curated: true },
+    ],
+  })
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/projects/curated-atlas')
+  await expect(page.locator('.detail-hero')).toHaveCSS('max-width', 'none')
+  await expect(page.locator('.technology-list li')).toHaveCount(2)
+  await expect(page.getByRole('link', { name: 'https://go.dev' })).toHaveAttribute('href', 'https://go.dev')
+  await expect(page.getByRole('link', { name: 'https://platform.openai.com/docs' })).toHaveAttribute('href', 'https://platform.openai.com/docs')
+  await expect(page.locator('.gallery-item')).toHaveCount(1)
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+})
