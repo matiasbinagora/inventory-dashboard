@@ -17,4 +17,4 @@
 - [x] 3.1 Add or update frontend tests for labels, metadata structure, link rendering, and title/description presentation.
 - [x] 3.2 Add reviewer-generated Playwright coverage for project detail labels, media/demo sections, links, and narrow viewport readability.
 - [x] 3.3 Run `npm test`, `npm run build`, `npm run e2e`, `openspec validate --all --strict`, `graphify update .`, Codebase Memory indexing/status, and `git diff --check`.
-- [ ] 3.4 Create a focused commit and PR for `DAY-1-FEATURE-018`, document validation evidence, and move its Trello card to `Code Review` without merging.
+- [x] 3.4 Create a focused commit and PR for `DAY-1-FEATURE-018`, document validation evidence, and move its Trello card to `Code Review` without merging.
