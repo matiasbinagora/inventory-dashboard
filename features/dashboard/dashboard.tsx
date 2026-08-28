@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { countUpValue, filterProjects } from './catalog'
 import type { Project } from './types'
+import { parseMetadataEntries } from '../shared/metadata'
 
 const icons = { dashboard: '⌂', catalog: '▦', admin: '⚙' }
 
@@ -40,7 +41,8 @@ function Thumbnail({ project }: { project: Project }) {
 }
 
 function ProjectCard({ project }: { project: Project }) {
-  return <a className="project-card" href={`/projects/${encodeURIComponent(project.id)}`}><Thumbnail project={project} /><div className="card-content"><span className="eyebrow">PROJECT / {project.id.slice(0, 8)}</span><h3>{project.name}</h3><p>{project.description || 'Curated project metadata'}</p><div className="tag-row">{project.technologies.slice(0, 3).map((technology) => <span key={technology} className="tag">{technology}</span>)}</div></div><span className="card-arrow" aria-hidden="true">↗</span></a>
+  const technologyNames = project.technologies.flatMap((technology) => parseMetadataEntries(technology).map((entry) => entry.primary)).filter(Boolean).slice(0, 3)
+  return <a className="project-card" href={`/projects/${encodeURIComponent(project.id)}`}><Thumbnail project={project} /><div className="card-content"><span className="eyebrow">PROJECT / {project.id.slice(0, 8)}</span><h3>{project.name}</h3><p className="card-description">{project.description || 'Curated project metadata'}</p><div className="tag-row">{technologyNames.map((technology) => <span key={technology} className="tag">{technology}</span>)}</div></div><span className="card-arrow" aria-hidden="true">↗</span></a>
 }
 
 function CatalogTable({ projects }: { projects: Project[] }) {

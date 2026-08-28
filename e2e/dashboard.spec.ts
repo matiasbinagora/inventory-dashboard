@@ -45,6 +45,23 @@ test('catalog switches presentation and filters API records', async ({ page }) =
   await expect(page.getByText('No projects match these filters')).toBeVisible()
 })
 
+test('catalog cards clamp descriptions and render technology names only', async ({ page }) => {
+  await page.route('**/api/projects', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([{ id: 'atlas', name: 'Atlas', description: 'One two three four five six seven eight nine ten', technologies: ['Go: https://go.dev', 'React'], links: [], media: [], milestones: [] }]),
+  }))
+  await page.goto('/')
+
+  const card = page.getByRole('link', { name: /Atlas/ })
+  await expect(card.locator('.card-description')).toHaveCSS('-webkit-line-clamp', '3')
+  await expect(card.getByText('Go')).toBeVisible()
+  await expect(card.getByText('React')).toBeVisible()
+  await expect(card.getByText('https://go.dev')).toHaveCount(0)
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+})
+
 test('serves a local favicon without a missing-icon 404', async ({ page }) => {
   const missingIconResponses: string[] = []
 

@@ -50,4 +50,17 @@ describe('ProjectDetail presentation', () => {
     expect(screen.getByRole('link', { name: project.agentic_platform.split(' — ')[1] })).toHaveAttribute('href', project.agentic_platform.split(' — ')[1])
     expect(screen.getByRole('link', { name: 'Demo' })).toHaveAttribute('href', project.media[1].source)
   })
+
+  it('renders the representative report at full content width while preserving detail links', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify(project), { status: 200 }))
+
+    render(<ProjectDetail projectID="atlas" />)
+    await screen.findByRole('heading', { name: 'Atlas' })
+
+    const report = document.querySelector('.gallery-item')
+    expect(report).toHaveClass('gallery-item')
+    expect(report?.querySelector('img')).not.toBeNull()
+    expect(screen.getByRole('link', { name: 'https://platform.openai.com/docs' })).toHaveAttribute('href', 'https://platform.openai.com/docs')
+    expect(screen.getByRole('link', { name: 'Source' })).toHaveAttribute('href', project.links[0].url)
+  })
 })
