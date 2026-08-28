@@ -16,4 +16,4 @@
 - [x] 3.1 Add frontend tests for form fields, validation feedback, and detail link rendering.
 - [x] 3.2 Add integration and reviewer-generated Playwright coverage for create/edit/reload and link navigation behavior.
 - [x] 3.3 Run Go tests, integration, race, vet, build, frontend tests/build, Playwright, `openspec validate --all --strict`, Graphify, Codebase Memory, and `git diff --check`.
-- [ ] 3.4 Create the focused commit and PR, document evidence, and move the Trello card to `Code Review` without merging.
+- [x] 3.4 Create the focused commit and PR, document evidence, and move the Trello card to `Code Review` without merging.
