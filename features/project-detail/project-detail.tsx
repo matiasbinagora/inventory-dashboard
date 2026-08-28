@@ -10,8 +10,9 @@ function ProjectDetailError() {
 
 function LinkList({ project }: { project: Project }) {
   const links = project.links.filter((link) => link.kind === 'github' || link.kind === 'trello')
-  if (!links.length) return null
-  return <section className="detail-section public-links-section" aria-labelledby="links-heading"><span className="eyebrow">PUBLIC REFERENCES</span><h2 id="links-heading">Continue exploring</h2><div className="public-links">{links.map((link) => <a key={link.id ?? link.url} href={link.url} target="_blank" rel="noreferrer" className="public-link"><span>{link.label || (link.kind === 'github' ? 'GitHub repository' : 'Trello board')}</span><span aria-hidden="true">↗</span></a>)}</div></section>
+  const dedicatedLinks = [project.github_repository_url && { url: project.github_repository_url, label: 'GitHub repository' }, project.trello_backlog_url && { url: project.trello_backlog_url, label: 'Trello backlog' }].filter(Boolean) as { url: string; label: string }[]
+  if (!links.length && !dedicatedLinks.length) return null
+  return <section className="detail-section public-links-section" aria-labelledby="links-heading"><span className="eyebrow">PUBLIC REFERENCES</span><h2 id="links-heading">Continue exploring</h2><div className="public-links">{links.map((link) => <a key={link.id ?? link.url} href={link.url} target="_blank" rel="noreferrer" className="public-link"><span>{link.label || (link.kind === 'github' ? 'GitHub repository' : 'Trello board')}</span><span aria-hidden="true">↗</span></a>)}{dedicatedLinks.map((link) => <a key={link.label} href={link.url} target="_blank" rel="noreferrer" className="public-link"><span>{link.label}</span><span aria-hidden="true">↗</span></a>)}</div></section>
 }
 
 function Gallery({ project, onSelect }: { project: Project; onSelect: (media: Media) => void }) {

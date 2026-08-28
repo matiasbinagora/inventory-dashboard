@@ -50,3 +50,29 @@ func TestProjectValidationRejectsSensitiveCuratedText(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectValidationRepositoryReferences(t *testing.T) {
+	tests := []struct {
+		name   string
+		github string
+		trello string
+		valid  bool
+	}{
+		{name: "both supported hosts", github: "https://www.github.com/acme/inventory", trello: "https://trello.com/b/board/cards", valid: true},
+		{name: "empty values allowed", valid: true},
+		{name: "http rejected", github: "http://github.com/acme/inventory"},
+		{name: "pathless rejected", trello: "https://trello.com/"},
+		{name: "userinfo rejected", github: "https://user:pass@github.com/acme/inventory"},
+		{name: "query rejected", trello: "https://trello.com/b/board?token=secret"},
+		{name: "unsupported host rejected", github: "https://example.com/acme/inventory"},
+		{name: "private host rejected", trello: "https://127.0.0.1/board"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := (Project{Name: "Project", GitHubRepositoryURL: tt.github, TrelloBacklogURL: tt.trello}).Validate()
+			if (err == nil) != tt.valid {
+				t.Fatalf("Validate() error=%v, valid=%v", err, tt.valid)
+			}
+		})
+	}
+}
