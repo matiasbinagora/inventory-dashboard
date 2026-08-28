@@ -38,7 +38,7 @@ func TestProjectCRUDAndValidation(t *testing.T) {
 		t.Fatalf("invalid project status = %d", invalid.Code)
 	}
 
-	created := request(http.MethodPost, "/api/projects", map[string]any{"name": "Editorial API", "technologies": []string{" Go "}})
+	created := request(http.MethodPost, "/api/projects", map[string]any{"name": "Editorial API", "technologies": []string{" Go "}, "github_repository_url": "https://github.com/example/editorial-api", "trello_backlog_url": "https://trello.com/b/editorial-api"})
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create status = %d, body=%s", created.Code, created.Body.String())
 	}
@@ -48,6 +48,13 @@ func TestProjectCRUDAndValidation(t *testing.T) {
 	}
 	if project.ID == "" || project.Technologies[0] != "Go" {
 		t.Fatalf("unexpected project: %+v", project)
+	}
+	if project.GitHubRepositoryURL != "https://github.com/example/editorial-api" || project.TrelloBacklogURL != "https://trello.com/b/editorial-api" {
+		t.Fatalf("repository references were not returned: %+v", project)
+	}
+	invalidReference := request(http.MethodPost, "/api/projects", map[string]any{"name": "Invalid reference", "github_repository_url": "https://github.com"})
+	if invalidReference.Code != http.StatusBadRequest {
+		t.Fatalf("invalid reference status = %d", invalidReference.Code)
 	}
 
 	link := request(http.MethodPost, "/api/projects/"+project.ID+"/links", domain.PublicLink{Kind: domain.GitHub, URL: "http://github.com/example/repo"})

@@ -57,13 +57,15 @@ func NewHandlerWithOriginAndMediaRoot(inventory *application.Inventory, allowedO
 }
 
 type projectRequest struct {
-	Name            string              `json:"name"`
-	Description     string              `json:"description"`
-	AgenticPlatform string              `json:"agentic_platform"`
-	Technologies    []string            `json:"technologies"`
-	Links           []domain.PublicLink `json:"links"`
-	Media           []domain.MediaAsset `json:"media"`
-	Milestones      []domain.Milestone  `json:"milestones"`
+	Name                string              `json:"name"`
+	Description         string              `json:"description"`
+	AgenticPlatform     string              `json:"agentic_platform"`
+	GitHubRepositoryURL string              `json:"github_repository_url"`
+	TrelloBacklogURL    string              `json:"trello_backlog_url"`
+	Technologies        []string            `json:"technologies"`
+	Links               []domain.PublicLink `json:"links"`
+	Media               []domain.MediaAsset `json:"media"`
+	Milestones          []domain.Milestone  `json:"milestones"`
 }
 
 type technologyRequest struct {
@@ -71,7 +73,7 @@ type technologyRequest struct {
 }
 
 func (r projectRequest) project() domain.Project {
-	return domain.Project{Name: r.Name, Description: r.Description, AgenticPlatform: r.AgenticPlatform, Technologies: r.Technologies, Links: r.Links, Media: r.Media, Milestones: r.Milestones}
+	return domain.Project{Name: r.Name, Description: r.Description, AgenticPlatform: r.AgenticPlatform, GitHubRepositoryURL: r.GitHubRepositoryURL, TrelloBacklogURL: r.TrelloBacklogURL, Technologies: r.Technologies, Links: r.Links, Media: r.Media, Milestones: r.Milestones}
 }
 
 func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {

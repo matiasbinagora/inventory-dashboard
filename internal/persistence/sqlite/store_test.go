@@ -4,6 +4,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -206,6 +207,77 @@ func TestStoreSurvivesReopen(t *testing.T) {
 	}
 	if loaded.Name != created.Name {
 		t.Fatalf("reopened project name=%q, want %q", loaded.Name, created.Name)
+	}
+}
+
+func TestStorePersistsAndReplacesRepositoryReferencesAcrossRestart(t *testing.T) {
+	ctx := context.Background()
+	dsn := filepath.Join(t.TempDir(), "links.db")
+	store, err := Open(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	project, err := store.CreateProject(ctx, domain.Project{Name: "Links", GitHubRepositoryURL: "https://github.com/acme/old", TrelloBacklogURL: "https://trello.com/b/old"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateProject(ctx, domain.Project{ID: project.ID, Name: "Links", GitHubRepositoryURL: "https://github.com/acme/new", TrelloBacklogURL: "https://trello.com/b/new"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	loaded, err := reopened.GetProject(ctx, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.GitHubRepositoryURL != "https://github.com/acme/new" || loaded.TrelloBacklogURL != "https://trello.com/b/new" {
+		t.Fatalf("references not replaced after restart: %+v", loaded)
+	}
+	if err := reopened.UpdateProject(ctx, domain.Project{ID: project.ID, Name: "Links"}); err != nil {
+		t.Fatal(err)
+	}
+	cleared, err := reopened.GetProject(ctx, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.GitHubRepositoryURL != "" || cleared.TrelloBacklogURL != "" {
+		t.Fatalf("references not cleared: %+v", cleared)
+	}
+}
+
+func TestOpenMigratesLegacyProjectsTableIdempotently(t *testing.T) {
+	ctx := context.Background()
+	dsn := filepath.Join(t.TempDir(), "legacy.db")
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', agentic_platform TEXT NOT NULL DEFAULT ''); INSERT INTO projects(id,name) VALUES('legacy','Legacy project')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	loaded, err := store.GetProject(ctx, "legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Name != "Legacy project" || loaded.GitHubRepositoryURL != "" || loaded.TrelloBacklogURL != "" {
+		t.Fatalf("legacy project was not preserved: %+v", loaded)
+	}
+	if _, err := store.db.ExecContext(ctx, `ALTER TABLE projects ADD COLUMN github_repository_url TEXT`); err == nil {
+		t.Fatal("migration was not idempotently applied")
 	}
 }
 

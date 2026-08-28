@@ -17,6 +17,8 @@ const project = {
     { id: 'video', role: 'video' as const, source: 'https://video.example.test/atlas', caption: 'Demo' , curated: true },
   ],
   milestones: [],
+  github_repository_url: 'https://github.com/example/atlas-repository',
+  trello_backlog_url: 'https://trello.com/b/atlas-backlog',
 }
 
 afterEach(() => {
@@ -49,6 +51,14 @@ describe('ProjectDetail presentation', () => {
     expect(screen.getByRole('link', { name: 'Plan' })).toHaveAttribute('href', project.links[1].url)
     expect(screen.getByRole('link', { name: project.agentic_platform.split(' — ')[1] })).toHaveAttribute('href', project.agentic_platform.split(' — ')[1])
     expect(screen.getByRole('link', { name: 'Demo' })).toHaveAttribute('href', project.media[1].source)
+  })
+
+  it('renders dedicated references separately when present', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ...project, links: [] }), { status: 200 }))
+    render(<ProjectDetail projectID="atlas" />)
+    await screen.findByRole('link', { name: 'GitHub repository' })
+    expect(screen.getByRole('link', { name: 'GitHub repository' })).toHaveAttribute('href', project.github_repository_url)
+    expect(screen.getByRole('link', { name: 'Trello backlog' })).toHaveAttribute('href', project.trello_backlog_url)
   })
 
   it('renders the representative report at full content width while preserving detail links', async () => {

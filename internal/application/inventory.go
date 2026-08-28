@@ -40,7 +40,7 @@ func (i *Inventory) CreateProject(ctx context.Context, project domain.Project) (
 	if creator, ok := i.repository.(AtomicProjectCreator); ok {
 		return creator.CreateProjectWithChildren(ctx, project)
 	}
-	created, err := i.repository.CreateProject(ctx, domain.Project{Name: project.Name, Description: project.Description, AgenticPlatform: project.AgenticPlatform, Technologies: project.Technologies})
+	created, err := i.repository.CreateProject(ctx, domain.Project{Name: project.Name, Description: project.Description, AgenticPlatform: project.AgenticPlatform, GitHubRepositoryURL: project.GitHubRepositoryURL, TrelloBacklogURL: project.TrelloBacklogURL, Technologies: project.Technologies})
 	if err != nil {
 		return domain.Project{}, err
 	}
@@ -103,6 +103,9 @@ func (i *Inventory) GetProject(ctx context.Context, id string) (domain.Project, 
 	return i.repository.GetProject(ctx, id)
 }
 func (i *Inventory) UpdateProject(ctx context.Context, project domain.Project) error {
+	if err := validateProjectChildren(project); err != nil {
+		return err
+	}
 	return i.repository.UpdateProject(ctx, project)
 }
 func (i *Inventory) DeleteProject(ctx context.Context, id string) error {

@@ -19,14 +19,16 @@ var (
 )
 
 type Project struct {
-	ID              string       `json:"id"`
-	Name            string       `json:"name"`
-	Description     string       `json:"description,omitempty"`
-	AgenticPlatform string       `json:"agentic_platform,omitempty"`
-	Technologies    []string     `json:"technologies"`
-	Links           []PublicLink `json:"links"`
-	Media           []MediaAsset `json:"media"`
-	Milestones      []Milestone  `json:"milestones"`
+	ID                  string       `json:"id"`
+	Name                string       `json:"name"`
+	Description         string       `json:"description,omitempty"`
+	AgenticPlatform     string       `json:"agentic_platform,omitempty"`
+	GitHubRepositoryURL string       `json:"github_repository_url,omitempty"`
+	TrelloBacklogURL    string       `json:"trello_backlog_url,omitempty"`
+	Technologies        []string     `json:"technologies"`
+	Links               []PublicLink `json:"links"`
+	Media               []MediaAsset `json:"media"`
+	Milestones          []Milestone  `json:"milestones"`
 }
 
 type LinkKind string
@@ -82,6 +84,31 @@ func (p Project) Validate() error {
 	}
 	if err := validateCuratedText(p.AgenticPlatform, "agentic platform"); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidProject, err)
+	}
+	if err := validateDedicatedURL(p.GitHubRepositoryURL, GitHub, "GitHub repository URL"); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidProject, err)
+	}
+	if err := validateDedicatedURL(p.TrelloBacklogURL, Trello, "Trello backlog URL"); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidProject, err)
+	}
+	return nil
+}
+
+func validateDedicatedURL(raw string, kind LinkKind, field string) error {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Hostname() == "" || u.Port() != "" || u.Path == "" || u.Path == "/" || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("%s must be an HTTPS URL with a path", field)
+	}
+	host := strings.ToLower(u.Hostname())
+	allowed := map[LinkKind]string{GitHub: "github.com", Trello: "trello.com"}
+	if host != allowed[kind] && host != "www."+allowed[kind] {
+		return fmt.Errorf("%s has an unsupported host", field)
+	}
+	if privateHost(host) {
+		return fmt.Errorf("%s has a private or local host", field)
 	}
 	return nil
 }

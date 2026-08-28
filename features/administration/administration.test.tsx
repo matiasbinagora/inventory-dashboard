@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { thumbnailPayload } from './form'
 
 vi.mock('./api', () => ({
@@ -14,6 +14,8 @@ vi.mock('./api', () => ({
 }))
 
 import { Administration } from './administration'
+
+afterEach(() => cleanup())
 
 describe('administration form helpers', () => {
   it('promotes a curated source without removing the original asset', () => {
@@ -30,5 +32,11 @@ describe('administration form helpers', () => {
     expect(screen.getByRole('heading', { name: 'Inventory Administration', level: 1 })).toBeVisible()
     expect(backLink.parentElement).toHaveClass('admin-header-nav')
     expect(screen.getByText('LOCAL / ADMINISTRATION')).toBeVisible()
+  })
+
+  it('renders optional repository reference fields', () => {
+    render(<Administration />)
+    expect(screen.getByRole('textbox', { name: 'GitHub repository URL' })).toBeVisible()
+    expect(screen.getByRole('textbox', { name: 'Trello backlog URL' })).toBeVisible()
   })
 })

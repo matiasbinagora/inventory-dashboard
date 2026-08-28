@@ -52,8 +52,40 @@ func (s *Store) initialize(ctx context.Context) error {
 	if err := s.ensureCuratedColumn(ctx); err != nil {
 		return err
 	}
+	if err := s.ensureProjectLinkColumns(ctx); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO schema_migrations(version) VALUES(1)`); err != nil {
 		return fmt.Errorf("record schema migration: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ensureProjectLinkColumns(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `PRAGMA table_info(projects)`)
+	if err != nil {
+		return fmt.Errorf("inspect project schema: %w", err)
+	}
+	defer rows.Close()
+	columns := map[string]bool{}
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return fmt.Errorf("inspect project column: %w", err)
+		}
+		columns[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read project schema: %w", err)
+	}
+	for _, column := range []string{"github_repository_url", "trello_backlog_url"} {
+		if !columns[column] {
+			if _, err := s.db.ExecContext(ctx, `ALTER TABLE projects ADD COLUMN `+column+` TEXT`); err != nil {
+				return fmt.Errorf("add %s: %w", column, err)
+			}
+		}
 	}
 	return nil
 }
@@ -161,7 +193,7 @@ func (s *Store) CreateProjectWithChildren(ctx context.Context, project domain.Pr
 }
 
 func insertProjectTx(ctx context.Context, tx *sql.Tx, project domain.Project) error {
-	if _, err := tx.ExecContext(ctx, `INSERT INTO projects(id,name,description,agentic_platform) VALUES(?,?,?,?)`, project.ID, strings.TrimSpace(project.Name), project.Description, project.AgenticPlatform); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO projects(id,name,description,agentic_platform,github_repository_url,trello_backlog_url) VALUES(?,?,?,?,?,?)`, project.ID, strings.TrimSpace(project.Name), project.Description, project.AgenticPlatform, nullable(project.GitHubRepositoryURL), nullable(project.TrelloBacklogURL)); err != nil {
 		return fmt.Errorf("insert project: %w", err)
 	}
 	for _, technology := range project.Technologies {
@@ -178,13 +210,16 @@ func insertProjectTx(ctx context.Context, tx *sql.Tx, project domain.Project) er
 
 func (s *Store) GetProject(ctx context.Context, id string) (domain.Project, error) {
 	var p domain.Project
-	err := s.db.QueryRowContext(ctx, `SELECT id,name,description,agentic_platform FROM projects WHERE id=?`, id).Scan(&p.ID, &p.Name, &p.Description, &p.AgenticPlatform)
+	var githubURL, trelloURL sql.NullString
+	err := s.db.QueryRowContext(ctx, `SELECT id,name,description,agentic_platform,github_repository_url,trello_backlog_url FROM projects WHERE id=?`, id).Scan(&p.ID, &p.Name, &p.Description, &p.AgenticPlatform, &githubURL, &trelloURL)
 	if err == sql.ErrNoRows {
 		return domain.Project{}, domain.ErrNotFound
 	}
 	if err != nil {
 		return domain.Project{}, fmt.Errorf("get project: %w", err)
 	}
+	p.GitHubRepositoryURL = githubURL.String
+	p.TrelloBacklogURL = trelloURL.String
 	p.Technologies = []string{}
 	p.Links = []domain.PublicLink{}
 	p.Media = []domain.MediaAsset{}
@@ -238,7 +273,7 @@ func (s *Store) UpdateProject(ctx context.Context, project domain.Project) error
 		return fmt.Errorf("begin project update: %w", err)
 	}
 	defer tx.Rollback()
-	result, err := tx.ExecContext(ctx, `UPDATE projects SET name=?,description=?,agentic_platform=? WHERE id=?`, strings.TrimSpace(project.Name), project.Description, project.AgenticPlatform, project.ID)
+	result, err := tx.ExecContext(ctx, `UPDATE projects SET name=?,description=?,agentic_platform=?,github_repository_url=?,trello_backlog_url=? WHERE id=?`, strings.TrimSpace(project.Name), project.Description, project.AgenticPlatform, nullable(project.GitHubRepositoryURL), nullable(project.TrelloBacklogURL), project.ID)
 	if err != nil {
 		return fmt.Errorf("update project: %w", err)
 	}
