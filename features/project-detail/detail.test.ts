@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fullSizeSource, imageMedia, localMediaURL, sortMilestones } from './detail'
+import { fullSizeSource, imageMedia, localMediaURL, parseMetadataEntries, sortMilestones } from './detail'
 import type { Project } from '../dashboard/types'
 
 const project: Project = {
@@ -26,6 +26,25 @@ describe('project detail data presentation', () => {
     expect(localMediaURL('https://cdn.example.test/demo.png')).toBe('https://cdn.example.test/demo.png')
   })
   it('keeps only image roles in the gallery', () => {
-    expect(imageMedia(project).map((media) => media.role)).toEqual(['original', 'thumbnail', 'screenshot'])
+    expect(imageMedia(project).map((media) => media.role)).toEqual(['thumbnail', 'screenshot'])
+  })
+  it('parses named metadata links and preserves unexpected content', () => {
+    expect(parseMetadataEntries(['Go: https://go.dev', 'Plain tool'])).toEqual([
+      { primary: 'Go', urls: ['https://go.dev'] },
+      { primary: 'Plain tool', urls: [] },
+    ])
+    expect(parseMetadataEntries('OpenAI — hosted docs: https://platform.openai.com/docs; Local runner')).toEqual([
+      { primary: 'OpenAI — hosted docs', urls: ['https://platform.openai.com/docs'] },
+      { primary: 'Local runner', urls: [] },
+    ])
+    expect(parseMetadataEntries('Python: https://python.org, Slack Bolt: https://slack.dev')).toEqual([
+      { primary: 'Python', urls: ['https://python.org'] },
+      { primary: 'Slack Bolt', urls: ['https://slack.dev'] },
+    ])
+  })
+  it('deduplicates equivalent image sources without changing project media', () => {
+    const duplicateProject = { ...project, media: [...project.media, { id: 'duplicate', role: 'screenshot' as const, source: 'media/atlas/original.png', curated: true }] }
+    expect(imageMedia(duplicateProject).map((media) => media.id)).toEqual(['thumb', 'shot'])
+    expect(duplicateProject.media).toHaveLength(4)
   })
 })
