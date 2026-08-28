@@ -16,4 +16,4 @@
 - [x] 3.1 Add frontend regression tests for parsing, semantic lists, URL presentation, and image deduplication.
 - [x] 3.2 Add reviewer-generated Playwright coverage at desktop and narrow viewports for full-width description and metadata readability.
 - [x] 3.3 Run `npm test`, `npm run build`, `npm run e2e`, `openspec validate --all --strict`, `graphify update .`, Codebase Memory, and `git diff --check`.
-- [ ] 3.4 Create the focused commit and PR, document evidence, and move the Trello card to `Code Review` without merging.
+- [x] 3.4 Create the focused commit and PR, document evidence, and move the Trello card to `Code Review` without merging.
