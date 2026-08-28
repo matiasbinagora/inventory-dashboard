@@ -20,7 +20,7 @@ test('sidebar Administration link navigates to the administration screen', async
   await page.goto('/')
   await page.getByLabel('Primary navigation').getByRole('link', { name: 'Administration' }).click()
   await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { name: 'Curate the inventory' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Inventory Administration' })).toBeVisible()
 })
 
 test('sidebar Administration link activates with the keyboard', async ({ page }) => {

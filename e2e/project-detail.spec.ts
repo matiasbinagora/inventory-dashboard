@@ -66,3 +66,18 @@ test('AC7 displays a loading state and an error state', async ({ page }) => {
   await page.goto('/projects/curated-atlas')
   await expect(page.locator('.detail-state[role="alert"]')).toContainText('Project unavailable')
 })
+
+test('AC8 presents refined detail sections without narrow viewport overflow', async ({ page }) => {
+  await mockProject(page)
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/projects/curated-atlas')
+  await expect(page.getByRole('heading', { name: 'Graphify Report' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Demo Video' })).toBeVisible()
+  await expect(page.locator('.technology-list li')).toHaveCount(2)
+  await expect(page.getByRole('link', { name: 'GitHub repository' })).toHaveAttribute('href', 'https://github.com/example/atlas')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.locator('.detail-page')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  expect(await page.locator('.detail-hero h1').evaluate((element) => element.getBoundingClientRect().right)).toBeLessThanOrEqual(390)
+})
